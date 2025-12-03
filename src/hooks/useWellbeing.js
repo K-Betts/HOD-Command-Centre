@@ -1,50 +1,29 @@
-import { useEffect, useState } from 'react';
-import {
-  addDoc,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  orderBy,
-  query,
-} from 'firebase/firestore';
-import { db } from '../services/firebase';
-import { appId } from '../config/appConfig';
+import { useMemo } from 'react';
+import { useUserCollection } from './shared/useUserCollection';
 
 export function useWellbeing(user) {
-  const [wellbeingLogs, setWellbeingLogs] = useState([]);
+  const {
+    data,
+    add,
+    remove,
+    loading,
+    error,
+  } = useUserCollection(user, ['wellbeingLogs'], {
+    orderBy: [{ field: 'date', direction: 'desc' }],
+    filterByYear: true,
+  });
 
-  useEffect(() => {
-    if (!user) return undefined;
-
-    const q = query(
-      collection(db, 'artifacts', appId, 'users', user.uid, 'wellbeingLogs'),
-      orderBy('date', 'desc')
-    );
-
-    return onSnapshot(q, (snapshot) => {
-      const data = snapshot.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-      }));
-      setWellbeingLogs(data);
-    });
-  }, [user]);
+  const wellbeingLogs = useMemo(() => data || [], [data]);
 
   const addLog = async (log) => {
     if (!user) return;
-    await addDoc(
-      collection(db, 'artifacts', appId, 'users', user.uid, 'wellbeingLogs'),
-      log
-    );
+    await add(log);
   };
 
   const deleteLog = async (id) => {
     if (!user) return;
-    await deleteDoc(
-      doc(db, 'artifacts', appId, 'users', user.uid, 'wellbeingLogs', id)
-    );
+    await remove(id);
   };
 
-  return { wellbeingLogs, addLog, deleteLog };
+  return { wellbeingLogs, addLog, deleteLog, loading, error };
 }

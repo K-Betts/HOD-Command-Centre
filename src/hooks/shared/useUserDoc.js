@@ -18,6 +18,7 @@ export function useUserDoc(user, segments = [], options = {}) {
     return doc(db, 'artifacts', appId, 'users', user.uid, ...segments);
   }, [user, segments]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription drives local state */
   useEffect(() => {
     if (!docRef) {
       setData(null);
@@ -55,6 +56,7 @@ export function useUserDoc(user, segments = [], options = {}) {
 
     return () => unsubscribe();
   }, [docRef, createIfMissing, defaultValue, mapDoc, user]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const save = useCallback(
     async (updates) => {

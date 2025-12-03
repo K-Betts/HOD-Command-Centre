@@ -9,6 +9,7 @@ import {
   Sparkles,
   Mail,
   SlidersHorizontal,
+  FileText,
 } from 'lucide-react';
 
 export function Sidebar({ activeTab, onChange }) {
@@ -27,6 +28,7 @@ export function Sidebar({ activeTab, onChange }) {
       items: [
         { id: 'comms', label: 'Comms', icon: MessageSquare },
         { id: 'advocate', label: 'Idea Refiner', icon: Sparkles },
+        { id: 'reports', label: 'Board Report', icon: FileText, note: 'Print-ready view' },
         { id: 'weeklyEmail', label: 'Weekly Email', icon: Mail },
       ],
     },

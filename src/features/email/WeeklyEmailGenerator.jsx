@@ -34,9 +34,7 @@ export function WeeklyEmailGenerator({ user }) {
       .slice(0, 8);
   }, [tasks]);
 
-  const events = useMemo(() => {
-    return Array.isArray(context?.events) ? context.events.slice(0, 8) : [];
-  }, [context?.events]);
+  const events = Array.isArray(context?.events) ? context.events.slice(0, 8) : [];
 
   const missingFields = useMemo(() => {
     const missing = [];

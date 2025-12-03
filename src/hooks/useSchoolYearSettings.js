@@ -13,7 +13,7 @@ const buildDefaults = () => {
   const currentAcademicYear = getAcademicYearLabel();
   const budgetResetDate =
     getDefaultBudgetResetDate(currentAcademicYear) || new Date();
-  return { currentAcademicYear, budgetResetDate, termDates: [] };
+  return { currentAcademicYear, budgetResetDate, termDates: [], budgetSpent: 0 };
 };
 
 const normalizeSettings = (payload) => {
@@ -24,7 +24,8 @@ const normalizeSettings = (payload) => {
     getDefaultBudgetResetDate(currentAcademicYear) ||
     null;
   const termDates = normalizeTermDates(payload?.termDates || []);
-  return { currentAcademicYear, budgetResetDate, termDates };
+  const budgetSpent = Number(payload?.budgetSpent) || 0;
+  return { currentAcademicYear, budgetResetDate, termDates, budgetSpent };
 };
 
 const serializeSettings = (payload) => {
@@ -37,6 +38,7 @@ const serializeSettings = (payload) => {
       start: term.start || null,
       end: term.end || null,
     })),
+    budgetSpent: Number(normalized.budgetSpent) || 0,
   };
 };
 
@@ -45,6 +47,7 @@ export function useSchoolYearSettings(user) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription drives settings state */
   useEffect(() => {
     if (!user) {
       setSettings(buildDefaults());
@@ -85,6 +88,7 @@ export function useSchoolYearSettings(user) {
 
     return () => unsubscribe();
   }, [user]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const saveSettings = async (next) => {
     if (!user) throw new Error('No user session.');

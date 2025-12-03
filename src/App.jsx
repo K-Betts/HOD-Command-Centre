@@ -11,6 +11,7 @@ import {
   X,
   Sunset,
   SlidersHorizontal,
+  FileText,
 } from 'lucide-react';
 import { TaskBoard } from './features/tasks/TaskBoard';
 import { DashboardView } from './features/dashboard/DashboardView';
@@ -35,6 +36,7 @@ import { AppShell } from './components/ui/AppShell';
 import { Sidebar } from './layout/Sidebar';
 import { ActionFab } from './components/ui/ActionFab';
 import { AuthGate } from './layout/AuthGate';
+import { DepartmentReport } from './features/reports/DepartmentReport';
 
 // --- Main App Component ---
 export default function App() {
@@ -68,6 +70,7 @@ function AuthedAppShell({ user }) {
     strategy: { icon: Map, label: 'Strategy War Room' },
     comms: { icon: MessageSquare, label: 'Comms' },
     advocate: { icon: Sparkles, label: 'Idea Refiner' },
+    reports: { icon: FileText, label: 'Board Report' },
     weeklyEmail: { icon: Mail, label: 'Weekly Email' },
     settings: { icon: SlidersHorizontal, label: 'System Settings' },
   };
@@ -118,15 +121,9 @@ function AuthedAppShell({ user }) {
           {activeTab === 'staff' && <StaffView user={user} setActiveTab={setActiveTab} />}
           {activeTab === 'comms' && <CommunicationShield staff={staff} />}
           {activeTab === 'advocate' && <DevilsAdvocate user={user} />}
+          {activeTab === 'reports' && <DepartmentReport user={user} />}
           {activeTab === 'weeklyEmail' && <WeeklyEmailGenerator user={user} />}
-          {activeTab === 'settings' && (
-            <SettingsHub
-              user={user}
-              staff={staff}
-              context={context}
-              updateContext={updateContext}
-            />
-          )}
+          {activeTab === 'settings' && <SettingsHub user={user} />}
         </div>
       </div>
 
@@ -185,7 +182,7 @@ function AuthedAppShell({ user }) {
   );
 }
 
-function SettingsHub({ user, staff, context, updateContext }) {
+function SettingsHub({ user }) {
   const [activeSection, setActiveSection] = useState('system');
   const sections = [
     { id: 'system', label: 'System Rhythm' },

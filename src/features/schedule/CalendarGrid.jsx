@@ -1,5 +1,5 @@
 import React from 'react';
-import { format, startOfWeek, addDays, getDay, getHours, getMinutes, differenceInMinutes } from 'date-fns';
+import { format, startOfWeek, addDays, getDay, differenceInMinutes } from 'date-fns';
 
 const eventTypeColors = {
   class: 'bg-blue-200 border-blue-400 text-blue-800',

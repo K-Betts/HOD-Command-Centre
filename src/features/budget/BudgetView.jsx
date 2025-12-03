@@ -72,7 +72,7 @@ export function BudgetView({ user }) {
     const initial =
       (settings && (settings.totalBudgetAED ?? settings.totalBudget)) || 18000;
     setTotalBudgetAED(initial);
-  }, [settings.totalBudgetAED, settings.totalBudget]);
+  }, [settings]);
 
   const handleSaveBudget = async () => {
     setSavingBudget(true);
@@ -636,10 +636,6 @@ function getFinalAED(expense) {
 function filterByYearMode(expenses, academicYear) {
   if (!Array.isArray(expenses)) return [];
   if (!academicYear) return [];
-
-  const [startYear] = academicYear.split('-').map(Number);
-  const start = new Date(startYear, 7, 1); // August 1st
-  const end = new Date(startYear + 1, 7, 0, 23, 59, 59, 999); // July 31st of next year
 
   return expenses.filter((e) => {
     if (!e.date) return false;

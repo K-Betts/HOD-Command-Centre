@@ -35,6 +35,7 @@ export default function LeadershipView({ user, staff = [], setActiveTab }) {
   const staffOptions = useMemo(() => staff.filter((s) => s.memberType !== 'stakeholder'), [staff]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync local draft with latest saved intent
     setWeeklyIntent(settings.weeklyIntent || '');
   }, [settings.weeklyIntent]);
 
@@ -324,7 +325,7 @@ export default function LeadershipView({ user, staff = [], setActiveTab }) {
   );
 }
 
-function BuckPill({ label, active, onClick, icon: Icon }) {
+function BuckPill({ label, active, onClick, icon: IconComponent }) {
   return (
     <button
       type="button"
@@ -333,7 +334,7 @@ function BuckPill({ label, active, onClick, icon: Icon }) {
         active ? 'bg-indigo-50 text-indigo-700 border-indigo-100' : 'bg-white text-gray-500 border-gray-200'
       }`}
     >
-      <Icon size={12} />
+      <IconComponent size={12} />
       {label}
     </button>
   );

@@ -18,6 +18,8 @@ export function TaskDetailModal({ task, onSave, onDelete, onClose }) {
       energyLevel: enriched.energyLevel || '',
       isWeeklyWin: typeof enriched.isWeeklyWin === 'boolean' ? enriched.isWeeklyWin : false,
       themeTag: enriched.themeTag || '',
+      delegatedTo: enriched.delegatedTo || '',
+      isWaitingFor: typeof enriched.isWaitingFor === 'boolean' ? enriched.isWaitingFor : false,
     };
   }, [task]);
 
@@ -30,6 +32,15 @@ export function TaskDetailModal({ task, onSave, onDelete, onClose }) {
 
   const handleChange = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
+  };
+
+  const handleDelegatedToChange = (value) => {
+    const hasValue = value.trim().length > 0;
+    setForm((prev) => ({
+      ...prev,
+      delegatedTo: value,
+      isWaitingFor: hasValue ? true : false,
+    }));
   };
 
   const handleSave = async () => {
@@ -101,6 +112,30 @@ export function TaskDetailModal({ task, onSave, onDelete, onClose }) {
               className="w-full p-3 rounded-xl border border-gray-200 text-sm"
               placeholder="Name"
             />
+          </div>
+          <div className="space-y-2 sm:col-span-2">
+            <div className="flex items-center justify-between gap-2">
+              <label className="text-xs font-bold text-gray-500 uppercase">
+                Delegated To (Optional)
+              </label>
+              <label className="text-[11px] font-semibold text-gray-600 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={form.isWaitingFor}
+                  onChange={(e) => handleChange('isWaitingFor', e.target.checked)}
+                />
+                Track in &quot;Waiting For&quot; list?
+              </label>
+            </div>
+            <input
+              value={form.delegatedTo}
+              onChange={(e) => handleDelegatedToChange(e.target.value)}
+              className="w-full p-3 rounded-xl border border-gray-200 text-sm"
+              placeholder="Name you delegated to"
+            />
+            <p className="text-[11px] text-gray-400">
+              Entering a name auto-tracks it in the Waiting For list.
+            </p>
           </div>
           <div className="space-y-2">
             <label className="text-xs font-bold text-gray-500 uppercase">Status</label>

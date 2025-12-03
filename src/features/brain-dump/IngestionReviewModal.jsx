@@ -118,6 +118,7 @@ export function IngestionReviewModal({
   isSaving = false,
   onApprove,
   onClose,
+  reviewOnly = false,
 }) {
   const safeAi = useMemo(
     () => (aiResult && typeof aiResult === 'object' ? aiResult : {}),
@@ -218,6 +219,11 @@ export function IngestionReviewModal({
       corrections: diffTaskCorrections(originals.current.tasks, tasks),
     };
     try {
+      if (reviewOnly) {
+        await onApprove?.(payload);
+        onClose?.();
+        return;
+      }
       setSaving(true);
       setSaveError('');
 

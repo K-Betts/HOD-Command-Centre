@@ -1,23 +1,35 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { appId } from '../config/appConfig';
 
 export function useStrategy(user) {
-  const [plan, setPlan] = useState({ milestones: [], themes: [], raw: '', priorities: [] });
+  const [plan, setPlan] = useState({
+    milestones: [],
+    themes: [],
+    raw: '',
+    priorities: [],
+    schoolPriorities: [],
+  });
   const [error, setError] = useState(null);
+  const ref = useMemo(
+    () =>
+      user
+        ? doc(
+            db,
+            'artifacts',
+            appId,
+            'users',
+            user.uid,
+            'settings',
+            'strategy'
+          )
+        : null,
+    [user]
+  );
 
   useEffect(() => {
-    if (!user) return undefined;
-    const ref = doc(
-      db,
-      'artifacts',
-      appId,
-      'users',
-      user.uid,
-      'settings',
-      'strategy'
-    );
+    if (!ref) return undefined;
     return onSnapshot(
       ref,
       (d) => {
@@ -28,10 +40,17 @@ export function useStrategy(user) {
             milestones: data.milestones || [],
             themes: data.themes || [],
             priorities: data.priorities || [],
+            schoolPriorities: data.schoolPriorities || [],
             raw: data.raw || '',
           });
         } else {
-          setDoc(ref, { milestones: [], themes: [], priorities: [], raw: '' });
+          setDoc(ref, {
+            milestones: [],
+            themes: [],
+            priorities: [],
+            schoolPriorities: [],
+            raw: '',
+          });
         }
       },
       (err) => {
@@ -39,16 +58,22 @@ export function useStrategy(user) {
         setError(err.message || 'Unable to load strategy.');
       }
     );
-  }, [user]);
+  }, [ref]);
 
   const updatePlan = async (next) => {
-    if (!user) return;
-    await setDoc(
-      doc(db, 'artifacts', appId, 'users', user.uid, 'settings', 'strategy'),
-      next,
-      { merge: true }
-    );
+    if (!ref) return;
+    await setDoc(ref, next, { merge: true });
   };
 
-  return { plan, updatePlan, error };
+  const savePriorities = async (priorities) => {
+    if (!ref) return;
+    await setDoc(ref, { priorities }, { merge: true });
+  };
+
+  const saveSchoolPriorities = async (schoolPriorities) => {
+    if (!ref) return;
+    await setDoc(ref, { schoolPriorities }, { merge: true });
+  };
+
+  return { plan, updatePlan, savePriorities, saveSchoolPriorities, error };
 }

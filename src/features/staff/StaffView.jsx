@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { format } from 'date-fns';
 import {
   Presentation,
@@ -23,6 +23,8 @@ import { StaffScheduleView } from './StaffScheduleView';
 import { useBuckBalance } from '../../hooks/useBuckBalance';
 import { BrainCard } from '../../components/ui/BrainCard';
 import { StatusBadge } from '../../components/ui/StatusBadge';
+import { useStrategy } from '../../hooks/useStrategy';
+import { getNextReviewDate, normalizeInitials } from '../../utils/priorities';
 
 const discColorStyles = {
   Red: 'bg-red-100 text-red-700 border-red-200',
@@ -68,6 +70,11 @@ const interactionTypeMeta = {
     label: 'Admin',
     badgeClass: 'bg-gray-50 text-gray-600 border-gray-200',
     description: 'Neutral updates or housekeeping',
+  },
+  OBSERVATION: {
+    label: 'Observation',
+    badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+    description: 'Context, mood, team dynamics, general notes',
   },
 };
 
@@ -226,9 +233,10 @@ function MeetingFinderView({ staff, onBack }) {
 
 export function StaffView({ user, setActiveTab }) {
   const { staff, addStaff, deleteStaff, updateStaff } = useStaff(user);
-  const { tasks, addTask } = useTasks(user);
+  const { tasks } = useTasks(user);
   const { context } = useContextData(user);
   const { balanceByStaff } = useBuckBalance(user, staff);
+  const { plan } = useStrategy(user);
   const [selectedStaff, setSelectedStaff] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newStaff, setNewStaff] = useState({
@@ -272,7 +280,6 @@ export function StaffView({ user, setActiveTab }) {
     return (
       <TeamMeetingView
         staff={staff}
-        addTask={addTask}
         onBack={() => setIsTeamMeetingMode(false)}
       />
     );
@@ -294,11 +301,10 @@ export function StaffView({ user, setActiveTab }) {
     return (
       <StaffDetailView
         staff={current}
-        allTasks={tasks}
-        addTask={addTask}
         onBack={() => setSelectedStaff(null)}
         onUpdate={(data) => updateStaff(current.id, data)}
         user={user}
+        strategyPriorities={plan?.priorities || []}
       />
     );
   }
@@ -697,7 +703,7 @@ export function StaffView({ user, setActiveTab }) {
   );
 }
 
-function TeamMeetingView({ staff, addTask, onBack }) {
+function TeamMeetingView({ staff, onBack }) {
   const [topic, setTopic] = useState('');
   const [agenda, setAgenda] = useState('');
   const [generating, setGenerating] = useState(false);
@@ -782,7 +788,7 @@ function TeamMeetingView({ staff, addTask, onBack }) {
   );
 }
 
-function StaffDetailView({ staff, allTasks, addTask, onBack, onUpdate, user }) {
+function StaffDetailView({ staff, onBack, onUpdate, user, strategyPriorities = [] }) {
   const [activeSubTab, setActiveSubTab] = useState('profile');
   const [editingInteraction, setEditingInteraction] = useState(null);
   const [interactionForm, setInteractionForm] = useState({
@@ -794,7 +800,29 @@ function StaffDetailView({ staff, allTasks, addTask, onBack, onUpdate, user }) {
   });
   const { interactions, addInteraction, updateInteraction, deleteInteraction } = useInteractionLogs(user, staff?.id);
   const { insights } = useStaffInsights(user, staff?.id);
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization -- intentional memo to avoid recalculating filters per render
+  const myStrategyActions = useMemo(() => {
+    if (!Array.isArray(strategyPriorities)) return [];
+    const myInitials = normalizeInitials(staff?.initials || staff?.name || '');
+    return strategyPriorities
+      .filter((p) => {
+        const assignmentType = (p.assignmentType || (p.isWholeTeam ? 'TEAM_GOAL' : 'INDIVIDUAL')).toUpperCase();
+        if (assignmentType !== 'INDIVIDUAL') return false;
+        const leadInitials = normalizeInitials(p.leadInitials || p.leadName || p.leadRaw || '');
+        return p.leadStaffId === staff?.id || (myInitials && leadInitials && leadInitials.startsWith(myInitials));
+      })
+      .map((p) => ({
+        ...p,
+        nextReviewDate: getNextReviewDate(p),
+      }));
+  }, [strategyPriorities, staff?.id, staff?.initials, staff?.name]);
+  const ragBadge = {
+    Green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    Amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    Red: 'bg-rose-50 text-rose-700 border-rose-200',
+  };
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset interaction form when switching staff
     setInteractionForm({
       date: new Date().toISOString().slice(0, 10),
       type: 'Neutral',
@@ -820,7 +848,13 @@ function StaffDetailView({ staff, allTasks, addTask, onBack, onUpdate, user }) {
     }
     const typeKey = (interactionForm.interactionType || '').toUpperCase();
     const buckTag =
-      typeKey === 'CHALLENGE' ? 'Challenge' : typeKey === 'SUPPORT' ? 'Support' : 'Admin';
+      typeKey === 'CHALLENGE'
+        ? 'Challenge'
+        : typeKey === 'SUPPORT'
+        ? 'Support'
+        : typeKey === 'OBSERVATION'
+        ? 'Observation'
+        : 'Admin';
 
     const payload = {
       date: interactionForm.date,
@@ -996,8 +1030,8 @@ function StaffDetailView({ staff, allTasks, addTask, onBack, onUpdate, user }) {
                   <div className="text-[11px] font-bold uppercase text-gray-500 tracking-wider mb-2">
                     Interaction Type (required)
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {['SUPPORT', 'CHALLENGE', 'ADMIN'].map((type) => {
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {['SUPPORT', 'CHALLENGE', 'ADMIN', 'OBSERVATION'].map((type) => {
                       const meta = getInteractionTypeMeta(type);
                       const isActive = interactionForm.interactionType === type;
                       return (
@@ -1106,6 +1140,49 @@ function StaffDetailView({ staff, allTasks, addTask, onBack, onUpdate, user }) {
                         <div className="text-[10px] text-gray-400">
                           Source: {i.source || 'manual'}
                         </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-bold text-gray-700 text-sm uppercase tracking-wider">
+                    Strategic Responsibilities
+                  </h4>
+                  <span className="text-xs text-gray-500 font-semibold">
+                    {myStrategyActions.length} linked
+                  </span>
+                </div>
+                <div className="space-y-3 max-h-[24vh] overflow-y-auto custom-scrollbar">
+                  {myStrategyActions.length === 0 && (
+                    <div className="text-xs text-gray-400 italic">
+                      No individual SIP actions linked to this staff member yet.
+                    </div>
+                  )}
+                  {myStrategyActions.map((action) => (
+                    <div key={action.id} className="p-3 rounded-xl border border-gray-100 bg-gray-50">
+                      <div className="flex items-center justify-between text-[11px] uppercase font-bold text-gray-500 gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                            Individual
+                          </span>
+                          <span className="line-clamp-1">{action.priorityName || action.objective || 'Objective'}</span>
+                        </div>
+                        {action.rag && (
+                          <span className={`px-2 py-0.5 rounded-full border ${ragBadge[action.rag] || 'border-gray-200 text-gray-600 bg-white'}`}>
+                            {action.rag}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-800 font-semibold mt-1">
+                        {action.action || 'Action not set'}
+                      </div>
+                      <div className="text-[11px] text-gray-500 mt-1">
+                        Next review:{' '}
+                        {action.nextReviewDate
+                          ? action.nextReviewDate.toISOString().slice(0, 10)
+                          : action.reviewDate || action.reviewFrequency || 'Not set'}
                       </div>
                     </div>
                   ))}
@@ -1289,6 +1366,7 @@ function StaffTimetableEditor({ timetable, onChange }) {
   const [local, setLocal] = useState(timetable || {});
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync local timetable editor when parent timetable changes
     setLocal(timetable || {});
   }, [timetable]);
 

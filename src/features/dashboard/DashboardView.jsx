@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { differenceInMinutes, format, isSameDay } from 'date-fns';
-import { Brain, Compass, CalendarDays, ShieldCheck, Mountain, Timer, Flame, ToggleLeft, Clock3 } from 'lucide-react';
+import { Brain, Compass, CalendarDays, ShieldCheck, Mountain, Timer, Flame, ToggleLeft, Clock3, BellRing } from 'lucide-react';
 import { useTasks } from '../../hooks/useTasks';
 import { useStaff } from '../../hooks/useStaff';
 import { useWellbeing } from '../../hooks/useWellbeing';
@@ -12,10 +12,14 @@ import { StrategicHeatmap } from '../strategy/StrategicHeatmap';
 import { useScheduleEvents } from '../../hooks/useScheduleEvents';
 import { WellbeingTrend } from '../wellbeing/WellbeingTrend';
 import { SmartContextWidget } from '../tasks/SmartContextWidget';
+import { useStrategy } from '../../hooks/useStrategy';
+import { getNextReviewDate, isPriorityDueSoon } from '../../utils/priorities';
+import { useToast } from '../../context/ToastContext';
 
 export function DashboardView({ user, setActiveTab }) {
   const { tasks } = useTasks(user);
   const { staff } = useStaff(user);
+  const { plan } = useStrategy(user);
   const { wellbeingLogs } = useWellbeing(user);
   const { riskFlags } = useBuckBalance(user, staff);
   const [smartPlanTime, setSmartPlanTime] = useState(null);
@@ -28,7 +32,7 @@ export function DashboardView({ user, setActiveTab }) {
     () => tasks.map((t) => applyContextTags(t)).filter((t) => t.isWeeklyWin),
     [tasks]
   );
-  const weeklyWins = useMemo(() => {
+  const weeklyWinTasks = useMemo(() => {
     const sorted = [...weeklyPinned].sort((a, b) => {
       const priDiff =
         priorityWeight(getEffectivePriority(b)) - priorityWeight(getEffectivePriority(a));
@@ -39,7 +43,7 @@ export function DashboardView({ user, setActiveTab }) {
     });
     return sorted.slice(0, 5);
   }, [weeklyPinned]);
-  const urgentTasks = useMemo(() => {
+  const urgentTaskList = useMemo(() => {
     const soon = new Date();
     soon.setDate(soon.getDate() + 2);
     return tasks
@@ -58,6 +62,73 @@ export function DashboardView({ user, setActiveTab }) {
       })
       .slice(0, 5);
   }, [tasks]);
+
+  const waitingTasks = useMemo(() => {
+    const active = tasks
+      .map((t) => applyContextTags(t))
+      .filter(
+        (t) =>
+          t.isWaitingFor &&
+          !t.archivedAt &&
+          (t.status || '').toString().toLowerCase() !== 'done'
+      );
+    return active.sort((a, b) => {
+      const dueA = a.dueDate || '9999-12-31';
+      const dueB = b.dueDate || '9999-12-31';
+      const byDue = dueA.localeCompare(dueB);
+      if (byDue !== 0) return byDue;
+      return (a.delegatedTo || a.assignee || '').localeCompare(
+        b.delegatedTo || b.assignee || ''
+      );
+    });
+  }, [tasks]);
+
+  const priorityAlerts = useMemo(() => {
+    const now = new Date();
+    return (plan?.priorities || [])
+      .map((p) => {
+        const nextReview = getNextReviewDate(p, now);
+        if (!nextReview) return null;
+        return {
+          id: `priority-${p.id}`,
+          __type: 'priority',
+          title: p.action || p.objective || 'Strategic Priority',
+          summary: p.objective || p.vision || '',
+          rag: p.rag || 'Amber',
+          dueDate: nextReview.toISOString().slice(0, 10),
+          dueSoon: isPriorityDueSoon(p, 7, now),
+          isUrgent: isPriorityDueSoon(p, 2, now),
+          lead: p.leadName || p.leadInitials || p.leadRaw || '',
+        };
+      })
+      .filter(Boolean);
+  }, [plan?.priorities]);
+
+  const priorityWeeklyWins = useMemo(
+    () => priorityAlerts.filter((p) => p.dueSoon),
+    [priorityAlerts]
+  );
+
+  const priorityUrgent = useMemo(
+    () => priorityAlerts.filter((p) => p.isUrgent || p.dueSoon),
+    [priorityAlerts]
+  );
+
+  const weeklyWins = useMemo(() => {
+    const combined = [...priorityWeeklyWins, ...weeklyWinTasks];
+    return combined
+      .sort(compareByDueAndPriority)
+      .slice(0, 5);
+  }, [priorityWeeklyWins, weeklyWinTasks]);
+
+  const totalPinned = weeklyPinned.length + priorityWeeklyWins.length;
+
+  const urgentItems = useMemo(() => {
+    const combined = [...priorityUrgent, ...urgentTaskList];
+    return combined
+      .sort(compareByDueAndPriority)
+      .slice(0, 5);
+  }, [priorityUrgent, urgentTaskList]);
 
   const atRiskStaff = useMemo(
     () =>
@@ -103,10 +174,11 @@ export function DashboardView({ user, setActiveTab }) {
       {dashboardMode === 'ADMIN' ? (
         <AdminMode
           weeklyWins={weeklyWins}
-          totalPinned={weeklyPinned.length}
+          totalPinned={totalPinned}
           onGoToTasks={() => setActiveTab('tasks')}
           user={user}
-          urgentTasks={urgentTasks}
+          urgentTasks={urgentItems}
+          waitingTasks={waitingTasks}
           onSmartPlan={openSmartPlan}
         />
       ) : (
@@ -168,6 +240,7 @@ function AdminMode({
   onGoToTasks,
   user,
   urgentTasks,
+  waitingTasks,
   onSmartPlan,
 }) {
   const { events } = useScheduleEvents(user);
@@ -183,6 +256,7 @@ function AdminMode({
       <div className="xl:col-span-4 space-y-4">
         <WeeklyWinsCompact tasks={weeklyWins} totalPinned={totalPinned} onGoToTasks={onGoToTasks} />
         <UrgentTasksStack tasks={(urgentTasks || []).slice(0, 3)} />
+        <PendingOnOthers tasks={waitingTasks} />
       </div>
     </div>
   );
@@ -336,20 +410,29 @@ function WeeklyWinsCompact({ tasks = [], totalPinned = 0, onGoToTasks }) {
               key={task.id}
               className="flex items-start gap-3 p-3 rounded-2xl border border-gray-100 bg-gray-50"
             >
-              <input
-                type="checkbox"
-                disabled
-                checked={(task.status || '').toLowerCase() === 'done'}
-                className="mt-1 accent-indigo-600"
-              />
+              {task.__type === 'priority' ? (
+                <div className="mt-1 w-4 h-4 rounded border border-amber-300 bg-amber-50" />
+              ) : (
+                <input
+                  type="checkbox"
+                  disabled
+                  checked={(task.status || '').toLowerCase() === 'done'}
+                  className="mt-1 accent-indigo-600"
+                />
+              )}
               <div className="flex-1">
                 <div className="text-sm font-semibold text-gray-900">{task.title}</div>
                 {task.summary && (
                   <div className="text-xs text-gray-500 line-clamp-1">{task.summary}</div>
                 )}
+                {task.__type === 'priority' && task.dueDate && (
+                  <div className="text-[11px] text-amber-700 mt-1">
+                    Next review: {formatFriendlyDate(task.dueDate)}
+                  </div>
+                )}
               </div>
               <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2 py-1">
-                Win
+                {task.__type === 'priority' ? 'Priority' : 'Win'}
               </span>
             </label>
           ))}
@@ -365,6 +448,11 @@ function WeeklyWinsCompact({ tasks = [], totalPinned = 0, onGoToTasks }) {
 }
 
 function UrgentTasksStack({ tasks = [] }) {
+  const ragPill = {
+    Green: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    Amber: 'bg-amber-50 text-amber-700 border-amber-200',
+    Red: 'bg-rose-50 text-rose-700 border-rose-200',
+  };
   return (
     <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-3">
       <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
@@ -385,9 +473,22 @@ function UrgentTasksStack({ tasks = [] }) {
                 {task.summary || 'No details'}
               </div>
               <div className="flex items-center gap-2 mt-2 text-[11px]">
-                <span className="px-2 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-100 font-bold">
-                  {getEffectivePriority(task)}
+                <span
+                  className={`px-2 py-1 rounded-full font-bold ${
+                    task.__type === 'priority'
+                      ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                      : 'bg-rose-50 text-rose-700 border border-rose-100'
+                  }`}
+                >
+                  {task.__type === 'priority' ? 'Priority Review' : getEffectivePriority(task)}
                 </span>
+                {task.__type === 'priority' && task.rag && (
+                  <span
+                    className={`px-2 py-1 rounded-full border ${ragPill[task.rag] || 'border-gray-200 text-gray-600 bg-white'}`}
+                  >
+                    {task.rag}
+                  </span>
+                )}
                 {task.dueDate && (
                   <span className="px-2 py-1 rounded-full bg-white border text-gray-600">
                     Due {formatFriendlyDate(task.dueDate)}
@@ -396,6 +497,87 @@ function UrgentTasksStack({ tasks = [] }) {
               </div>
             </div>
             <Timer size={16} className="text-rose-400 shrink-0" />
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function PendingOnOthers({ tasks = [] }) {
+  const { addToast } = useToast();
+
+  const copyNudge = async (task) => {
+    const name = task.delegatedTo || task.assignee || 'there';
+    const title = task.title || 'this task';
+    const message = `Hi ${name}, just checking in on ${title}. Thanks!`;
+
+    const fallbackCopy = () => {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = message;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(message);
+        addToast?.('success', 'Nudge text copied to clipboard');
+      } else if (fallbackCopy()) {
+        addToast?.('success', 'Nudge text copied to clipboard');
+      } else {
+        throw new Error('Clipboard unavailable');
+      }
+    } catch (err) {
+      console.error('Failed to copy nudge', err);
+      addToast?.('error', 'Could not copy the nudge text.');
+    }
+  };
+
+  const visible = tasks.slice(0, 5);
+
+  return (
+    <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+      <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
+        <BellRing className="text-indigo-500" size={18} />
+        Pending on Others
+      </div>
+      {visible.length === 0 ? (
+        <div className="text-sm text-gray-400 italic">
+          No delegated items are being tracked right now.
+        </div>
+      ) : (
+        visible.map((task) => (
+          <div
+            key={task.id || task.title}
+            className="p-3 rounded-xl border border-gray-100 bg-gray-50 flex justify-between items-start gap-3"
+          >
+            <div>
+              <div className="text-sm font-semibold text-gray-800 line-clamp-2">
+                {task.title || 'Task'}
+              </div>
+              <div className="text-xs text-gray-500">
+                Waiting on {task.delegatedTo || task.assignee || 'someone'}
+                {task.dueDate && ` • Due ${formatFriendlyDate(task.dueDate)}`}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => copyNudge(task)}
+              className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors"
+            >
+              Nudge
+            </button>
           </div>
         ))
       )}
@@ -584,4 +766,13 @@ function priorityWeight(p) {
   if (p === 'High') return 3;
   if (p === 'Medium') return 2;
   return 1;
+}
+
+function compareByDueAndPriority(a, b) {
+  const weightA = a.__type === 'priority' ? 4 : priorityWeight(getEffectivePriority(a));
+  const weightB = b.__type === 'priority' ? 4 : priorityWeight(getEffectivePriority(b));
+  if (weightA !== weightB) return weightB - weightA;
+  const dueA = a.dueDate || '9999-99-99';
+  const dueB = b.dueDate || '9999-99-99';
+  return dueA.localeCompare(dueB);
 }

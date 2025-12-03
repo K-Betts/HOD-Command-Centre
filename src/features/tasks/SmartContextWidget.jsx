@@ -34,6 +34,7 @@ export function SmartContextWidget({
 
   useEffect(() => {
     if (prefillTime) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync preset time filter when provided
       setSelectedTime(prefillTime);
       setHasSearched(false);
     }
@@ -41,6 +42,7 @@ export function SmartContextWidget({
 
   useEffect(() => {
     if (prefillEnergy) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync preset energy filter when provided
       setSelectedEnergy(normalizeEnergy(prefillEnergy));
       setHasSearched(false);
     }

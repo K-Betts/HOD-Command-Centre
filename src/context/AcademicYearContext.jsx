@@ -64,6 +64,7 @@ export function AcademicYearProvider({ user, children }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- hook export is intentional
 export function useAcademicYear() {
   return useContext(AcademicYearContext);
 }

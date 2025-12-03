@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react';
 
 export function ActionFab({
   label = 'Quick Capture',
-  icon: Icon = Plus,
+  icon: IconComponent = Plus,
   className,
   ...props
 }) {
@@ -20,7 +20,7 @@ export function ActionFab({
       {...props}
     >
       <span className="sr-only">{label}</span>
-      <Icon size={24} strokeWidth={2.5} />
+      <IconComponent size={24} strokeWidth={2.5} />
     </button>
   );
 }

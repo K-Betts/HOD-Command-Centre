@@ -27,37 +27,24 @@ export function useUserCollection(user, segments = [], options = {}) {
   const { currentAcademicYear, loading: academicYearLoading } = useAcademicYear();
   const filterByYear = Boolean(options.filterByYear);
 
-  const segmentsKey = useMemo(
-    () => JSON.stringify(Array.isArray(segments) ? segments : []),
-    [segments]
-  );
   const resolvedSegments = useMemo(
     () => (Array.isArray(segments) ? [...segments] : []),
-    [segmentsKey]
+    [segments]
   );
 
   const collectionRef = useMemo(() => {
     if (!user) return null;
     return collection(db, 'artifacts', appId, 'users', user.uid, ...resolvedSegments);
-  }, [user, segmentsKey]);
-
-  const whereKey = useMemo(
-    () => JSON.stringify(options.where || []),
-    [options.where]
-  );
-  const orderKey = useMemo(
-    () => JSON.stringify(options.orderBy || []),
-    [options.orderBy]
-  );
+  }, [user, resolvedSegments]);
 
   const whereRules = useMemo(
     () => (Array.isArray(options.where) ? options.where : []),
-    [whereKey]
+    [options.where]
   );
 
   const orderRules = useMemo(
     () => (Array.isArray(options.orderBy) ? options.orderBy : []),
-    [orderKey]
+    [options.orderBy]
   );
 
   const constraints = useMemo(() => {
@@ -88,6 +75,7 @@ export function useUserCollection(user, segments = [], options = {}) {
     return [...whereFilters, ...orderFilters];
   }, [user, whereRules, orderRules, filterByYear, currentAcademicYear]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription drives local state */
   useEffect(() => {
     if (!collectionRef) {
       setData([]);
@@ -127,6 +115,7 @@ export function useUserCollection(user, segments = [], options = {}) {
 
     return () => unsubscribe();
   }, [collectionRef, constraints, filterByYear, academicYearLoading, currentAcademicYear]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const add = useCallback(
     async (payload) => {

@@ -6,6 +6,7 @@ import { appId } from '../config/appConfig';
 export function useStaffInsights(user, staffName) {
   const [insights, setInsights] = useState([]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription keeps insights fresh */
   useEffect(() => {
     if (!user || !staffName) {
       setInsights([]);
@@ -24,6 +25,7 @@ export function useStaffInsights(user, staffName) {
       setInsights(rows);
     });
   }, [user, staffName]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const deleteInsight = async (id) => {
     if (!user || !id) return;

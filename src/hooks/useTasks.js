@@ -41,9 +41,49 @@ export function useTasks(user) {
     return undefined;
   }, [user, currentAcademicYear]);
 
+  const normalizeDelegationForAdd = (task = {}) => {
+    const delegatedTo = (task.delegatedTo || '').toString().trim();
+    const isWaitingFor =
+      typeof task.isWaitingFor === 'boolean'
+        ? task.isWaitingFor
+        : Boolean(delegatedTo);
+    return { delegatedTo, isWaitingFor };
+  };
+
+  const buildDelegationPatch = (updates = {}, existing = {}) => {
+    const hasDelegatedUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      'delegatedTo'
+    );
+    const hasWaitingUpdate = Object.prototype.hasOwnProperty.call(
+      updates,
+      'isWaitingFor'
+    );
+
+    if (!hasDelegatedUpdate && !hasWaitingUpdate) return {};
+
+    const delegatedSource = hasDelegatedUpdate
+      ? updates.delegatedTo
+      : existing.delegatedTo;
+    const delegatedTo = (delegatedSource || '').toString().trim();
+
+    let isWaitingFor = hasWaitingUpdate
+      ? updates.isWaitingFor
+      : existing.isWaitingFor;
+    if (!hasWaitingUpdate && hasDelegatedUpdate) {
+      isWaitingFor = Boolean(delegatedTo);
+    }
+
+    return {
+      delegatedTo,
+      isWaitingFor: Boolean(isWaitingFor),
+    };
+  };
+
   const addTask = async (task) => {
     if (!user) return;
-    await add(task);
+    const delegation = normalizeDelegationForAdd(task);
+    await add({ ...task, ...delegation });
   };
 
   const updateTask = async (id, updates) => {
@@ -90,7 +130,9 @@ export function useTasks(user) {
       );
     }
 
-    await update(id, updates);
+    const delegationPatch = buildDelegationPatch(updates, existing || {});
+
+    await update(id, { ...updates, ...delegationPatch });
 
     if (toastMessage) {
       addToast('success', toastMessage);

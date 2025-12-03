@@ -15,11 +15,13 @@ function normalizeBuckTag(interaction = {}) {
       '').toString().toLowerCase();
   if (raw.startsWith('chall')) return 'challenge';
   if (raw.startsWith('supp')) return 'support';
+  if (raw.startsWith('obs')) return 'observation';
   if (raw.startsWith('admin') || raw.startsWith('neutral')) return 'admin';
 
   const fallback = (interaction.type || '').toString().toLowerCase();
   if (fallback === 'praise') return 'support';
   if (fallback === 'concern') return 'challenge';
+  if (fallback === 'observation') return 'observation';
   return 'admin';
 }
 
@@ -75,7 +77,7 @@ function computeRisk({ counts, lastSupportDate, lastChallengeDate }) {
 }
 
 function buildStats(interactions = []) {
-  const counts = { challenge: 0, support: 0, admin: 0 };
+  const counts = { challenge: 0, support: 0, admin: 0, observation: 0 };
   let lastSupportDate = null;
   let lastChallengeDate = null;
   let lastInteractionDate = null;
@@ -85,6 +87,7 @@ function buildStats(interactions = []) {
     const date = parseDate(interaction.date);
     if (tag === 'support') counts.support += 1;
     else if (tag === 'challenge') counts.challenge += 1;
+    else if (tag === 'observation') counts.observation += 1;
     else counts.admin += 1;
 
     if (date) {
@@ -114,6 +117,7 @@ function buildStats(interactions = []) {
 export function useBuckBalance(user, staffList = []) {
   const [balanceByStaff, setBalanceByStaff] = useState({});
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription updates local cache */
   useEffect(() => {
     if (!user || !Array.isArray(staffList) || staffList.length === 0) {
       setBalanceByStaff({});
@@ -150,6 +154,7 @@ export function useBuckBalance(user, staffList = []) {
       unsubscribers.forEach((fn) => fn && fn());
     };
   }, [user, staffList]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const riskFlags = useMemo(() => {
     if (!Array.isArray(staffList)) return [];

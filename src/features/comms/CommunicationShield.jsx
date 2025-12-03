@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { MessageSquare, Sparkles, Users, User, Mail, Megaphone } from 'lucide-react';
 import { rewriteCommunication } from '../../services/ai';
 import { useToast } from '../../context/ToastContext';
@@ -45,9 +45,10 @@ export function CommunicationShield({ staff = [] }) {
   const [error, setError] = useState('');
   const { addToast } = useToast();
 
-  useEffect(() => {
-    if (audienceType !== 'staff') setSelectedStaffId('');
-  }, [audienceType]);
+  const handleAudienceChange = (id) => {
+    setAudienceType(id);
+    if (id !== 'staff') setSelectedStaffId('');
+  };
 
   const selectedStaff = useMemo(
     () => staff.find((m) => m.id === selectedStaffId),
@@ -155,7 +156,7 @@ export function CommunicationShield({ staff = [] }) {
             return (
               <button
                 key={option.id}
-                onClick={() => setAudienceType(option.id)}
+                onClick={() => handleAudienceChange(option.id)}
                 className={`flex items-start gap-3 p-4 rounded-2xl border text-left transition-all ${
                   isActive
                     ? 'border-indigo-200 bg-indigo-50 shadow-sm'

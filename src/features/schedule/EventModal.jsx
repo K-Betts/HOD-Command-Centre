@@ -24,6 +24,7 @@ export function EventModal({ event, onSave, onDelete, onClose }) {
 
   useEffect(() => {
     if (event) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- keep form in sync when a different event is passed in
       setFormData({
         title: event.title || '',
         type: event.type || 'class',

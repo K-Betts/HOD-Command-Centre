@@ -15,6 +15,7 @@ import { appId } from '../config/appConfig';
 export function useStaffScheduleEvents(user, staffId) {
   const [events, setEvents] = useState([]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription keeps events synced */
   useEffect(() => {
     if (!user || !staffId) {
       setEvents([]);
@@ -36,6 +37,7 @@ export function useStaffScheduleEvents(user, staffId) {
 
     return () => unsubscribe();
   }, [user, staffId]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const addEvent = (eventData) => {
     const eventsCollection = collection(db, 'artifacts', appId, 'users', user.uid, 'staff', staffId, 'scheduleEvents');

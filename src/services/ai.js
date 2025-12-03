@@ -35,10 +35,12 @@ async function fetchJson(body, config) {
     try {
       return await response.json();
     } catch (parseErr) {
+      console.error('AI response JSON parse failed', parseErr);
       notifyAiError('AI Service Unavailable - check connection.');
       return {};
     }
   } catch (err) {
+    console.error('AI request failed', err);
     notifyAiError('AI Service Unavailable - check connection.');
     return {};
   }
@@ -67,6 +69,7 @@ export async function analyzeContext(text, type) {
     if (!text) throw new Error('Empty AI response');
     return JSON.parse(text);
   } catch (error) {
+    console.error('analyzeContext failed', error);
     notifyAiError('AI Service Unavailable - check connection.');
     return null;
   }
@@ -244,7 +247,7 @@ function safeParseCandidate(data) {
     try {
       const parsed = JSON.parse(attempt);
       return { ...parsed, __rawText: trimmedRaw };
-    } catch (err) {
+    } catch {
       // continue to next attempt
     }
   }
@@ -552,6 +555,7 @@ Rules:
       coachingTip,
     };
   } catch (e) {
+    console.error('analyzeStaffProfile failed', e);
     notifyAiError('AI Service Unavailable - check connection.');
     return null;
   }
@@ -593,6 +597,7 @@ Return STRICT JSON ONLY with this shape:
       headline: parsed.headline || parsed.summary || '',
     };
   } catch (e) {
+    console.error('validateStrategicWhy failed', e);
     notifyAiError('AI Service Unavailable - check connection.');
     return {
       verdict: 'result-led',
@@ -631,6 +636,7 @@ export async function generateAgenda(topic, staffContext) {
     if (!text) throw new Error('Empty AI response');
     return text;
   } catch (e) {
+    console.error('generateAgenda failed', e);
     notifyAiError('AI Service Unavailable - check connection.');
     return 'Error generating agenda.';
   }
@@ -691,6 +697,7 @@ Keep meaning intact, make it concise, respectful, and practical. Use UK English.
     const rewritten = extractTextCandidate(data);
     return rewritten || 'Error generating response.';
   } catch (e) {
+    console.error('rewriteCommunication failed', e);
     notifyAiError('AI Service Unavailable - check connection.');
     return 'Error generating response.';
   }
@@ -705,6 +712,7 @@ export async function suggestSubtasks(task) {
     if (!text) throw new Error('Empty AI response');
     return text;
   } catch (e) {
+    console.error('suggestSubtasks failed', e);
     notifyAiError('AI Service Unavailable - check connection.');
     return 'Error generating steps.';
   }
@@ -752,6 +760,7 @@ Provide a short, practical summary in UK English: comment on pace of spend, cate
     if (!text) throw new Error('Empty AI response');
     return text;
   } catch (e) {
+    console.error('auditBudget AI summary failed', e);
     notifyAiError('AI Service Unavailable - check connection.');
     return 'Error auditing budget.';
   }
@@ -767,7 +776,90 @@ export async function analyzeStrategicPlan(planText) {
     if (!text) throw new Error('No AI response');
     return JSON.parse(text);
   } catch (error) {
+    console.error('analyzeStrategicPlan failed', error);
     return { milestones: [], themes: [] };
+  }
+}
+
+export async function parseSchoolCalendar(rawText) {
+  const prompt = `Extract events and strictly categorize them into:
+- Academic Logistics (Exams, Reports, Deadlines)
+- CPD & QA (Training, Observations, Reviews)
+- Parents (Evenings, Coffee mornings)
+- Enrichment/Trips (Sports, Visits, Events)
+
+Input (messy text or pasted table):
+${rawText}
+
+Return ONLY valid JSON in this exact shape (no prose):
+[{"date":"YYYY-MM-DD","title":"Event name","category":"One of the categories above"}]
+
+Rules:
+- Force dates into ISO (YYYY-MM-DD). If month/day missing, infer nearest sensible date this academic year.
+- Map every row/line you can; do not drop events.
+- Category must exactly match one of the four labels above.`;
+
+  try {
+    const data = await fetchJson(prompt, {
+      generationConfig: { responseMimeType: 'application/json' },
+    });
+    const text = extractTextCandidate(data);
+    if (!text) throw new Error('No AI response');
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed?.events)) return parsed.events;
+    return [];
+  } catch (error) {
+    console.error('parseSchoolCalendar failed', error);
+    notifyAiError('AI Service Unavailable - check connection.');
+    return [];
+  }
+}
+
+export async function parsePriorityImport(rawText) {
+  const schemaHint = `Return JSON with this shape:
+{
+  "priorities": [
+    {
+      "vision": "String | optional",
+      "objective": "String",
+      "action": "String",
+      "lead": "Initials or name",
+      "reviewDate": "Date string if present",
+      "reviewFrequency": "Weekly/Monthly/etc if present",
+      "evidence": "How success will be evidenced",
+      "rag": "Green/Amber/Red"
+    }
+  ]
+}`;
+
+  try {
+    const data = await fetchJson(
+      `You are parsing a School Improvement Plan pasted as messy text or tables. Extract the hierarchy (Vision -> Objectives -> Actions) and return a flat list of actions that can be tracked.
+
+Input:
+${rawText}
+
+Rules:
+- Keep objective text on each action under "objective".
+- Keep the main vision statement if visible on each action under "vision".
+- Lead should be initials or short name from any "Lead" column.
+- reviewDate can be any date-like string (eg "Dec-25", "15 Jan", "w/b 2 Sep").
+- If cadence is provided (eg "Weekly", "Half termly"), return it under reviewFrequency.
+- Evidence/success measures go under "evidence".
+- Add rag if you see R/A/G or colour labels; otherwise leave empty.
+- ${schemaHint}`,
+      { generationConfig: { responseMimeType: 'application/json' } }
+    );
+    const text = extractTextCandidate(data);
+    if (!text) throw new Error('No AI response');
+    const parsed = JSON.parse(text);
+    if (parsed && Array.isArray(parsed.priorities)) return parsed;
+    return { priorities: [] };
+  } catch (error) {
+    console.error('parsePriorityImport failed', error);
+    notifyAiError('AI Service Unavailable - check connection.');
+    return { priorities: [] };
   }
 }
 
@@ -797,6 +889,7 @@ Return concise bullet points under these headings:
     if (!text) throw new Error('Empty AI response');
     return text;
   } catch (error) {
+    console.error('devilAdvocateCritique failed', error);
     notifyAiError('AI Service Unavailable - check connection.');
     return 'I cannot critique this right now.';
   }
@@ -840,6 +933,7 @@ Rules:
     const text = extractTextCandidate(data);
     return text || 'Unable to draft the email right now.';
   } catch (error) {
+    console.error('generateWeeklyEmail failed', error);
     notifyAiError('AI Service Unavailable - check connection.');
     return 'Unable to draft the email right now.';
   }

@@ -249,6 +249,7 @@ export function TaskBoard({ user, onEditTask }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- shared utility used across task views
 export function createTaskFingerprint(taskLike, forcedAssignee) {
   return generateFingerprint(
     {
@@ -751,6 +752,7 @@ function TaskRow({ task, updateTask, deleteTask, onEditTask, archived = false, o
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components -- shared utility used by context widgets
 export function getEffectivePriority(task) {
   const manualPriority = task?.priority || 'Medium';
   if (!task?.dueDate) return manualPriority;
