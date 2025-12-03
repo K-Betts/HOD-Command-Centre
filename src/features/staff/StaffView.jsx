@@ -872,6 +872,56 @@ function StaffDetailView({ staff, allTasks, addTask, onBack, onUpdate, user }) {
     }
   };
 
+  const downloadInteractionHistory = () => {
+    if (!interactions.length) {
+      alert('No interactions to download yet.');
+      return;
+    }
+
+    const escapeCsv = (value) => {
+      if (value === null || value === undefined) return '';
+      const str = String(value).replace(/"/g, '""');
+      return /[",\n]/.test(str) ? `"${str}"` : str;
+    };
+
+    const formatDateForCsv = (value) => {
+      if (!value) return '';
+      try {
+        const d = value?.toDate ? value.toDate() : new Date(value);
+        if (Number.isNaN(d.getTime())) return String(value);
+        return d.toISOString().slice(0, 10);
+      } catch {
+        return String(value);
+      }
+    };
+
+    const rows = interactions.map((i) => {
+      const typeKey = (i.interactionType || i.buckTag || 'ADMIN').toString().toUpperCase();
+      return [
+        formatDateForCsv(i.date),
+        i.type || 'Neutral',
+        getInteractionTypeMeta(typeKey).label,
+        i.summary || '',
+        i.source || 'manual',
+      ];
+    });
+
+    const csv = [
+      ['Date', 'Tone', 'Interaction Type', 'Summary', 'Source'].join(','),
+      ...rows.map((row) => row.map(escapeCsv).join(',')),
+    ].join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${staff.name || 'staff'}_interactions.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="bg-white rounded-[2.5rem] shadow-xl border border-gray-200 overflow-hidden flex flex-col h-[calc(100vh-140px)]">
       <div className="p-8 border-b border-gray-100 bg-gray-50/30 flex items-center gap-6">
@@ -1016,9 +1066,18 @@ function StaffDetailView({ staff, allTasks, addTask, onBack, onUpdate, user }) {
                 </div>
               </div>
               <div className="bg-white p-6 rounded-3xl border border-gray-200 shadow-sm">
-                <h4 className="font-bold text-gray-700 text-sm uppercase tracking-wider mb-3">
-                  Interaction History
-                </h4>
+                <div className="flex items-center justify-between mb-3 gap-3">
+                  <h4 className="font-bold text-gray-700 text-sm uppercase tracking-wider">
+                    Interaction History
+                  </h4>
+                  <button
+                    onClick={downloadInteractionHistory}
+                    className="flex items-center gap-2 text-sm font-semibold px-3 py-2 rounded-xl border border-gray-200 bg-gray-50 text-gray-700 hover:bg-white"
+                  >
+                    <FileText size={16} />
+                    Download CSV
+                  </button>
+                </div>
                 <div className="space-y-3 max-h-[40vh] overflow-y-auto custom-scrollbar">
                   {interactions.length === 0 && (
                     <div className="text-xs text-gray-400 italic">No interactions yet.</div>
