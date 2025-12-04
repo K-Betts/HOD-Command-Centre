@@ -27,9 +27,14 @@ export function useUserCollection(user, segments = [], options = {}) {
   const { currentAcademicYear, loading: academicYearLoading } = useAcademicYear();
   const filterByYear = Boolean(options.filterByYear);
 
+  // Stabilise arrays so callers using inline literals don't resubscribe on every render.
+  const segmentsKey = useMemo(
+    () => (Array.isArray(segments) ? segments.join('::') : ''),
+    [segments]
+  );
   const resolvedSegments = useMemo(
     () => (Array.isArray(segments) ? [...segments] : []),
-    [segments]
+    [segmentsKey]
   );
 
   const collectionRef = useMemo(() => {
@@ -37,14 +42,22 @@ export function useUserCollection(user, segments = [], options = {}) {
     return collection(db, 'artifacts', appId, 'users', user.uid, ...resolvedSegments);
   }, [user, resolvedSegments]);
 
-  const whereRules = useMemo(
-    () => (Array.isArray(options.where) ? options.where : []),
+  const whereKey = useMemo(
+    () => (Array.isArray(options.where) ? JSON.stringify(options.where) : ''),
     [options.where]
   );
+  const whereRules = useMemo(
+    () => (whereKey ? JSON.parse(whereKey) : []),
+    [whereKey]
+  );
 
-  const orderRules = useMemo(
-    () => (Array.isArray(options.orderBy) ? options.orderBy : []),
+  const orderKey = useMemo(
+    () => (Array.isArray(options.orderBy) ? JSON.stringify(options.orderBy) : ''),
     [options.orderBy]
+  );
+  const orderRules = useMemo(
+    () => (orderKey ? JSON.parse(orderKey) : []),
+    [orderKey]
   );
 
   const constraints = useMemo(() => {

@@ -20,11 +20,12 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
-// Auto-detect long polling/fetch stream support to avoid WebChannel 400 errors on restrictive networks.
-const db = initializeFirestore(app, {
-  experimentalAutoDetectLongPolling: true,
-  useFetchStreams: false,
-}) || getFirestore(app);
+// Force long polling to avoid WebChannel 400s when proxies block streaming; disable fetch streams for safety.
+const db =
+  initializeFirestore(app, {
+    experimentalForceLongPolling: true,
+    useFetchStreams: false,
+  }) || getFirestore(app);
 const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 
 const provider = new GoogleAuthProvider();
