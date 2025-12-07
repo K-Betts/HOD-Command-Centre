@@ -3,6 +3,18 @@ import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { appId } from '../config/appConfig';
 
+/**
+ * Hook to manage strategy data scoped to the academic year level.
+ * 
+ * Data structure:
+ * - schoolPriorities: Year-long mandates (SIP). NOT filtered by term. Persists across all terms.
+ * - priorities: Term-specific actions. These are now stored in departmentPlan/ subcollection.
+ *   This is kept for backward compatibility but should migrate to departmentPlan soon.
+ * - milestones, themes, raw: General strategy metadata (year-level).
+ * 
+ * Note: Do NOT scope these to terms or half-terms.
+ * Only the Department Calendar and its actions are term-specific (stored in strategy/departmentPlan).
+ */
 export function useStrategy(user) {
   const [plan, setPlan] = useState({
     milestones: [],
@@ -40,6 +52,8 @@ export function useStrategy(user) {
             milestones: data.milestones || [],
             themes: data.themes || [],
             priorities: data.priorities || [],
+            // IMPORTANT: schoolPriorities are fetched based on academicYear ONLY (no term filter)
+            // They represent year-long mandates and should persist across all terms
             schoolPriorities: data.schoolPriorities || [],
             raw: data.raw || '',
           });
@@ -72,6 +86,7 @@ export function useStrategy(user) {
 
   const saveSchoolPriorities = async (schoolPriorities) => {
     if (!ref) return;
+    // Save school priorities at year level (NOT term-specific)
     await setDoc(ref, { schoolPriorities }, { merge: true });
   };
 

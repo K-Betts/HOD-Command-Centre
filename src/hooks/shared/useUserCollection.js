@@ -19,46 +19,50 @@ import { useAcademicYear } from '../../context/AcademicYearContext';
  * Generic Firestore collection hook scoped to the current user.
  * - Auto-filters by uid for safety.
  * - Auto-attaches uid on create.
+ * - Stabilises all dependency inputs with JSON.stringify to prevent render loops.
  */
 export function useUserCollection(user, segments = [], options = {}) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { currentAcademicYear, loading: academicYearLoading } = useAcademicYear();
-  const filterByYear = Boolean(options.filterByYear);
 
-  // Stabilise arrays so callers using inline literals don't resubscribe on every render.
+  // Stabilise inputs
   const segmentsKey = useMemo(
-    () => (Array.isArray(segments) ? segments.join('::') : ''),
+    () => JSON.stringify(Array.isArray(segments) ? segments : []),
     [segments]
   );
-  const resolvedSegments = useMemo(
-    () => (Array.isArray(segments) ? [...segments] : []),
-    [segmentsKey]
+  const resolvedSegments = useMemo(() => {
+    try {
+      return JSON.parse(segmentsKey);
+    } catch {
+      return [];
+    }
+  }, [segmentsKey]);
+
+  const optionsKey = useMemo(() => JSON.stringify(options || {}), [options]);
+  const parsedOptions = useMemo(() => {
+    try {
+      return JSON.parse(optionsKey);
+    } catch {
+      return {};
+    }
+  }, [optionsKey]);
+
+  const filterByYear = Boolean(parsedOptions.filterByYear);
+  const whereRules = useMemo(
+    () => (Array.isArray(parsedOptions.where) ? parsedOptions.where : []),
+    [parsedOptions]
+  );
+  const orderRules = useMemo(
+    () => (Array.isArray(parsedOptions.orderBy) ? parsedOptions.orderBy : []),
+    [parsedOptions]
   );
 
   const collectionRef = useMemo(() => {
     if (!user) return null;
     return collection(db, 'artifacts', appId, 'users', user.uid, ...resolvedSegments);
   }, [user, resolvedSegments]);
-
-  const whereKey = useMemo(
-    () => (Array.isArray(options.where) ? JSON.stringify(options.where) : ''),
-    [options.where]
-  );
-  const whereRules = useMemo(
-    () => (whereKey ? JSON.parse(whereKey) : []),
-    [whereKey]
-  );
-
-  const orderKey = useMemo(
-    () => (Array.isArray(options.orderBy) ? JSON.stringify(options.orderBy) : ''),
-    [options.orderBy]
-  );
-  const orderRules = useMemo(
-    () => (orderKey ? JSON.parse(orderKey) : []),
-    [orderKey]
-  );
 
   const constraints = useMemo(() => {
     if (!user) return [];
@@ -88,7 +92,7 @@ export function useUserCollection(user, segments = [], options = {}) {
     return [...whereFilters, ...orderFilters];
   }, [user, whereRules, orderRules, filterByYear, currentAcademicYear]);
 
-  /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription drives local state */
+  /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription controls state */
   useEffect(() => {
     if (!collectionRef) {
       setData([]);
@@ -114,7 +118,6 @@ export function useUserCollection(user, segments = [], options = {}) {
       q,
       (snap) => {
         setError(null);
-        // Ensure Firestore doc id is authoritative to avoid collisions with any stored "id" field
         const rows = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
         setData(rows);
         setLoading(false);

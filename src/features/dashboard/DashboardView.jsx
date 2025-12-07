@@ -17,7 +17,7 @@ import { getNextReviewDate, isPriorityDueSoon } from '../../utils/priorities';
 import { useToast } from '../../context/ToastContext';
 
 export function DashboardView({ user, setActiveTab }) {
-  const { tasks } = useTasks(user);
+  const { tasks, addTask } = useTasks(user);
   const { staff } = useStaff(user);
   const { plan } = useStrategy(user);
   const { wellbeingLogs } = useWellbeing(user);
@@ -179,6 +179,7 @@ export function DashboardView({ user, setActiveTab }) {
           user={user}
           urgentTasks={urgentItems}
           waitingTasks={waitingTasks}
+          addTask={addTask}
           onSmartPlan={openSmartPlan}
         />
       ) : (
@@ -241,22 +242,44 @@ function AdminMode({
   user,
   urgentTasks,
   waitingTasks,
+  addTask,
   onSmartPlan,
 }) {
   const { events } = useScheduleEvents(user);
+  const { addToast } = useToast();
   const handleSmartPlan = (timeLabel, durationMinutes) =>
     onSmartPlan?.(timeLabel, durationMinutes);
+  const handleAddQuickTask = async (title) => {
+    if (!title) return;
+    try {
+      await addTask?.({
+        title,
+        status: 'todo',
+        priority: 'Medium',
+        isWaitingFor: false,
+      });
+      addToast?.('success', 'Task added to your stack');
+    } catch (err) {
+      console.error('Quick add task failed', err);
+      addToast?.('error', 'Could not add the task right now.');
+    }
+  };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-      <div className="xl:col-span-8 space-y-4">
-        <DayTimeline events={events} onSmartPlan={handleSmartPlan} />
+    <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
+      <div className="xl:col-span-3 space-y-4 h-full">
+        <DayTimeline events={events} onSmartPlan={handleSmartPlan} className="h-full" />
       </div>
 
-      <div className="xl:col-span-4 space-y-4">
-        <WeeklyWinsCompact tasks={weeklyWins} totalPinned={totalPinned} onGoToTasks={onGoToTasks} />
-        <UrgentTasksStack tasks={(urgentTasks || []).slice(0, 3)} />
-        <PendingOnOthers tasks={waitingTasks} />
+      <div className="xl:col-span-2 h-full">
+        <ExecutionStack
+          weeklyWins={weeklyWins}
+          totalPinned={totalPinned}
+          urgentTasks={urgentTasks}
+          waitingTasks={waitingTasks}
+          onGoToTasks={onGoToTasks}
+          onAddTask={handleAddQuickTask}
+        />
       </div>
     </div>
   );
@@ -281,12 +304,203 @@ function LeadershipMode({
   );
 }
 
-function DayTimeline({ events = [], onSmartPlan }) {
+function ExecutionStack({
+  weeklyWins = [],
+  totalPinned = 0,
+  urgentTasks = [],
+  waitingTasks = [],
+  onGoToTasks,
+  onAddTask,
+}) {
+  const { addToast } = useToast();
+  const [quickTitle, setQuickTitle] = useState('');
+  const hiddenWins = Math.max(0, totalPinned - weeklyWins.length);
+  const visibleUrgent = (urgentTasks || []).slice(0, 3);
+  const visibleWaiting = (waitingTasks || []).slice(0, 5);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const trimmed = quickTitle.trim();
+    if (!trimmed) return;
+    await onAddTask?.(trimmed);
+    setQuickTitle('');
+  };
+
+  return (
+    <div className="bg-white/90 backdrop-blur-sm p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col gap-5 h-full">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-slate-500">
+            Execution Stack
+          </div>
+          <h3 className="text-xl font-bold text-slate-900">Weekly Wins + Signals</h3>
+        </div>
+        <button
+          type="button"
+          onClick={onGoToTasks}
+          className="text-[11px] font-bold text-indigo-700 underline"
+        >
+          Taskboard
+        </button>
+      </div>
+
+      <div className="space-y-5 flex-1">
+        <div className="space-y-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
+            <Mountain className="text-indigo-500" size={18} />
+            Weekly Wins
+          </div>
+          {weeklyWins.length === 0 ? (
+            <div className="text-sm text-gray-500 italic">Pin a Weekly Win from the taskboard.</div>
+          ) : (
+            <div className="space-y-2">
+              {weeklyWins.map((task) => (
+                <label
+                  key={task.id}
+                  className="flex items-start gap-3 p-3 rounded-2xl border border-gray-100 bg-gray-50"
+                >
+                  {task.__type === 'priority' ? (
+                    <div className="mt-1 w-4 h-4 rounded border border-amber-300 bg-amber-50" />
+                  ) : (
+                    <input
+                      type="checkbox"
+                      disabled
+                      checked={(task.status || '').toLowerCase() === 'done'}
+                      className="mt-1 accent-indigo-600"
+                    />
+                  )}
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-gray-900">{task.title}</div>
+                    {task.summary && (
+                      <div className="text-xs text-gray-500 line-clamp-1">{task.summary}</div>
+                    )}
+                    {task.__type === 'priority' && task.dueDate && (
+                      <div className="text-[11px] text-amber-700 mt-1">
+                        Next review: {formatFriendlyDate(task.dueDate)}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[10px] font-bold text-amber-700 bg-amber-100 border border-amber-200 rounded-full px-2 py-1">
+                    {task.__type === 'priority' ? 'Priority' : 'Win'}
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+          {hiddenWins > 0 && (
+            <div className="text-[11px] text-gray-500">
+              Showing top {weeklyWins.length}; {hiddenWins} more wins hidden.
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-3 border-b border-slate-100 pb-4">
+          <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
+            <Flame className="text-rose-500" size={18} />
+            Urgent Tasks
+          </div>
+          {visibleUrgent.length === 0 ? (
+            <div className="text-sm text-gray-400 italic">Nothing burning. Stay proactive.</div>
+          ) : (
+            visibleUrgent.map((task) => (
+              <div
+                key={task.id}
+                className="p-3 rounded-xl border border-gray-100 bg-gray-50 flex justify-between items-start gap-3"
+              >
+                <div>
+                  <div className="text-sm font-semibold text-gray-800">{task.title}</div>
+                  <div className="text-xs text-gray-500 line-clamp-1">
+                    {task.summary || 'No details'}
+                  </div>
+                  <div className="flex items-center gap-2 mt-2 text-[11px]">
+                    <span
+                      className={`px-2 py-1 rounded-full font-bold ${
+                        task.__type === 'priority'
+                          ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                          : 'bg-rose-50 text-rose-700 border border-rose-100'
+                      }`}
+                    >
+                      {task.__type === 'priority' ? 'Priority Review' : getEffectivePriority(task)}
+                    </span>
+                    {task.dueDate && (
+                      <span className="px-2 py-1 rounded-full bg-white border text-gray-600">
+                        Due {formatFriendlyDate(task.dueDate)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <Timer size={16} className="text-rose-400 shrink-0" />
+              </div>
+            ))
+          )}
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2 text-sm font-bold text-gray-800">
+            <BellRing className="text-indigo-500" size={18} />
+            Waiting For
+          </div>
+          {visibleWaiting.length === 0 ? (
+            <div className="text-sm text-gray-400 italic">
+              No delegated items are being tracked right now.
+            </div>
+          ) : (
+            visibleWaiting.map((task) => (
+              <div
+                key={task.id || task.title}
+                className="p-3 rounded-xl border border-gray-100 bg-gray-50 flex justify-between items-start gap-3"
+              >
+                <div>
+                  <div className="text-sm font-semibold text-gray-800 line-clamp-2">
+                    {task.title || 'Task'}
+                  </div>
+                  <div className="text-xs text-gray-500">
+                    Waiting on {task.delegatedTo || task.assignee || 'someone'}
+                    {task.dueDate && ` • Due ${formatFriendlyDate(task.dueDate)}`}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => copyNudgeText(task, addToast)}
+                  className="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 transition-colors"
+                >
+                  Nudge
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="pt-2 border-t border-slate-100">
+        <label className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500 block mb-2">
+          Add Task
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            value={quickTitle}
+            onChange={(e) => setQuickTitle(e.target.value)}
+            placeholder="Capture the next action..."
+            className="flex-1 p-3 rounded-2xl border border-slate-200 bg-white focus:ring-2 focus:ring-indigo-100 text-sm"
+          />
+          <button
+            type="submit"
+            className="px-4 py-3 rounded-2xl bg-indigo-600 text-white text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-colors"
+          >
+            Add Task
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+function DayTimeline({ events = [], onSmartPlan, className = '' }) {
   const blocks = useMemo(() => buildDayTimeline(events), [events]);
   const dayLabel = format(new Date(), 'EEE d MMM');
 
   return (
-    <div className="bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-4 min-h-[520px]">
+    <div className={`bg-white p-6 rounded-3xl shadow-sm border border-gray-100 space-y-4 min-h-[520px] ${className}`}>
       <div className="flex items-start justify-between">
         <div>
           <div className="text-xs font-bold uppercase tracking-wide text-indigo-600 flex items-center gap-2">
@@ -379,6 +593,43 @@ function DayTimeline({ events = [], onSmartPlan }) {
       )}
     </div>
   );
+}
+
+async function copyNudgeText(task, addToast) {
+  const name = task.delegatedTo || task.assignee || 'there';
+  const title = task.title || 'this task';
+  const message = `Hi ${name}, just checking in on ${title}. Thanks!`;
+
+  const fallbackCopy = () => {
+    try {
+      const textarea = document.createElement('textarea');
+      textarea.value = message;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'absolute';
+      textarea.style.left = '-9999px';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  try {
+    if (navigator?.clipboard?.writeText) {
+      await navigator.clipboard.writeText(message);
+      addToast?.('success', 'Nudge text copied to clipboard');
+    } else if (fallbackCopy()) {
+      addToast?.('success', 'Nudge text copied to clipboard');
+    } else {
+      throw new Error('Clipboard unavailable');
+    }
+  } catch (err) {
+    console.error('Failed to copy nudge', err);
+    addToast?.('error', 'Could not copy the nudge text.');
+  }
 }
 
 function WeeklyWinsCompact({ tasks = [], totalPinned = 0, onGoToTasks }) {
@@ -507,42 +758,7 @@ function UrgentTasksStack({ tasks = [] }) {
 function PendingOnOthers({ tasks = [] }) {
   const { addToast } = useToast();
 
-  const copyNudge = async (task) => {
-    const name = task.delegatedTo || task.assignee || 'there';
-    const title = task.title || 'this task';
-    const message = `Hi ${name}, just checking in on ${title}. Thanks!`;
-
-    const fallbackCopy = () => {
-      try {
-        const textarea = document.createElement('textarea');
-        textarea.value = message;
-        textarea.setAttribute('readonly', '');
-        textarea.style.position = 'absolute';
-        textarea.style.left = '-9999px';
-        document.body.appendChild(textarea);
-        textarea.select();
-        document.execCommand('copy');
-        document.body.removeChild(textarea);
-        return true;
-      } catch {
-        return false;
-      }
-    };
-
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(message);
-        addToast?.('success', 'Nudge text copied to clipboard');
-      } else if (fallbackCopy()) {
-        addToast?.('success', 'Nudge text copied to clipboard');
-      } else {
-        throw new Error('Clipboard unavailable');
-      }
-    } catch (err) {
-      console.error('Failed to copy nudge', err);
-      addToast?.('error', 'Could not copy the nudge text.');
-    }
-  };
+  const copyNudge = (task) => copyNudgeText(task, addToast);
 
   const visible = tasks.slice(0, 5);
 

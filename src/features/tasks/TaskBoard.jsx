@@ -30,6 +30,18 @@ const statusTone = {
   done: 'support',
 };
 
+const statusCardStyles = {
+  todo: 'border-slate-200 bg-white hover:border-slate-300',
+  doing: 'border-sky-200 bg-sky-50/70 hover:border-sky-300',
+  done: 'border-emerald-200 bg-emerald-50/70 hover:border-emerald-300 opacity-90',
+};
+
+const statusRowStyles = {
+  todo: 'border-slate-200 bg-white hover:bg-slate-50',
+  doing: 'border-sky-400 bg-sky-50/70 hover:bg-sky-100',
+  done: 'border-emerald-400 bg-emerald-50/70 hover:bg-emerald-100 opacity-90',
+};
+
 const priorityWeight = { High: 3, Medium: 2, Low: 1 };
 
 const toDateValue = (value) => {
@@ -359,6 +371,7 @@ function KanbanBoard({ tasks = [], updateTask, deleteTask, onEditTask }) {
   const renderCard = (task, idx) => {
     const displayTask = applyContextTags(task);
     const status = (displayTask.status || 'todo').toLowerCase();
+    const cardTone = statusCardStyles[status] || statusCardStyles.todo;
     const order = ['todo', 'doing', 'done'];
     const canMoveLeft = order.indexOf(status) > 0;
     const canMoveRight = order.indexOf(status) < order.length - 1;
@@ -369,7 +382,7 @@ function KanbanBoard({ tasks = [], updateTask, deleteTask, onEditTask }) {
       <div
         key={taskKey(task, idx, status)}
         onClick={() => onEditTask?.(task)}
-        className="p-4 rounded-2xl bg-white border border-slate-100 shadow-sm hover:shadow-md transition-all cursor-pointer space-y-3"
+        className={`p-4 rounded-2xl border shadow-sm hover:shadow-md transition-all cursor-pointer space-y-3 ${cardTone}`}
       >
         <div className="flex items-start justify-between gap-2">
           <div className="space-y-1">
@@ -575,7 +588,7 @@ function TaskRow({ task, updateTask, deleteTask, onEditTask, archived = false, o
   const displayTask = applyContextTags(task);
   const manualPriority = displayTask.priority || 'Medium';
   const effectivePriority = getEffectivePriority(displayTask);
-  const currentStatus = displayTask.status || 'todo';
+  const currentStatus = (displayTask.status || 'todo').toString().toLowerCase();
   const statusOrder = ['todo', 'doing', 'done'];
   const currentIndex = statusOrder.indexOf(currentStatus);
   const canMoveLeft = currentIndex > 0;
@@ -626,11 +639,12 @@ function TaskRow({ task, updateTask, deleteTask, onEditTask, archived = false, o
   const dueDateValue = displayTask.dueDate ? new Date(displayTask.dueDate) : null;
   const hasDueDate = dueDateValue && !Number.isNaN(dueDateValue.getTime());
   const isOverdue = hasDueDate ? dueDateValue < new Date() : false;
+  const rowTone = statusRowStyles[currentStatus] || statusRowStyles.todo;
 
   return (
     <div
       onClick={() => onEditTask?.(task)}
-      className="flex items-start justify-between gap-4 p-4 hover:bg-slate-50 transition-colors cursor-pointer"
+      className={`flex items-start justify-between gap-4 p-4 transition-colors cursor-pointer border-l-4 rounded-xl ${rowTone}`}
     >
       <div className="flex-1 min-w-0 space-y-2">
         <div className="flex items-center gap-2 flex-wrap">

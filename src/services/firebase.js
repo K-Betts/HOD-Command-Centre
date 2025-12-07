@@ -7,6 +7,7 @@ import {
   signOut as firebaseSignOut,
 } from 'firebase/auth';
 import { getFirestore, initializeFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -26,6 +27,7 @@ const db =
     experimentalForceLongPolling: true,
     useFetchStreams: false,
   }) || getFirestore(app);
+const storage = getStorage(app);
 const analytics = typeof window !== 'undefined' ? getAnalytics(app) : null;
 
 const provider = new GoogleAuthProvider();
@@ -33,4 +35,4 @@ const provider = new GoogleAuthProvider();
 const signIn = () => signInWithPopup(auth, provider);
 const signOut = () => firebaseSignOut(auth);
 
-export { app, auth, db, analytics, signIn, signOut };
+export { app, auth, db, analytics, signIn, signOut, storage };

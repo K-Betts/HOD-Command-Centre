@@ -12,10 +12,13 @@
   "dependencies": {
     "date-fns": "^4.1.0",
     "firebase": "^12.6.0",
+    "html2canvas": "^1.4.1",
+    "ical.js": "^2.2.1",
+    "jspdf": "^3.0.4",
     "lucide-react": "^0.555.0",
     "react": "^19.2.0",
-    "react-firebase-hooks": "^5.1.1",
     "react-dom": "^19.2.0",
+    "react-firebase-hooks": "^5.1.1",
     "recharts": "^2.12.7"
   },
   "devDependencies": {

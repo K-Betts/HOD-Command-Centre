@@ -182,8 +182,8 @@ function isOlderThan(dateValue, cutoffDate) {
 
 async function runAutoArchive(user, academicYear) {
   if (!user || !academicYear) return;
-  const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
   const q = query(
     collection(db, 'artifacts', appId, 'users', user.uid, 'tasks'),
     where('status', '==', 'done'),
@@ -192,7 +192,7 @@ async function runAutoArchive(user, academicYear) {
   const snap = await getDocs(q);
   const updates = snap.docs.filter((d) => {
     const data = d.data();
-    return data.completedAt && !data.archivedAt && isOlderThan(data.completedAt, oneWeekAgo);
+    return data.completedAt && !data.archivedAt && isOlderThan(data.completedAt, startOfToday);
   });
   await Promise.all(
     updates.map((docSnap) =>

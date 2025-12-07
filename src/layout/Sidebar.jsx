@@ -10,25 +10,31 @@ import {
   Mail,
   SlidersHorizontal,
   FileText,
+  NotebookPen,
 } from 'lucide-react';
 
-export function Sidebar({ activeTab, onChange }) {
+export function Sidebar({ activeTab, onChange, waitingCount = 0 }) {
   const navGroups = [
     {
-      title: 'COMMAND',
+      title: 'EXECUTION',
       items: [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, note: 'Mission control' },
         { id: 'tasks', label: 'Tasks', icon: CheckSquare, note: 'Includes archive filter' },
-        { id: 'staff', label: 'Staff Room', icon: Users, note: 'Leadership tab inside' },
-        { id: 'strategy', label: 'Strategy', icon: Map, note: 'Horizon + Budget' },
+        { id: 'meetings', label: 'Meetings', icon: NotebookPen, note: 'Agendas + minutes' },
       ],
     },
     {
-      title: 'TOOLS',
+      title: 'LEADERSHIP',
+      items: [
+        { id: 'staff', label: 'Staff Room', icon: Users, note: 'Leadership tab inside' },
+        { id: 'strategy', label: 'Strategy', icon: Map, note: 'Horizon + Budget' },
+        { id: 'reports', label: 'Reports', icon: FileText, note: 'Board report' },
+      ],
+    },
+    {
+      title: 'OUTPUTS',
       items: [
         { id: 'comms', label: 'Comms', icon: MessageSquare },
-        { id: 'advocate', label: 'Idea Refiner', icon: Sparkles },
-        { id: 'reports', label: 'Board Report', icon: FileText, note: 'Print-ready view' },
         { id: 'weeklyEmail', label: 'Weekly Email', icon: Mail },
       ],
     },
@@ -41,28 +47,28 @@ export function Sidebar({ activeTab, onChange }) {
   ];
 
   return (
-    <aside className="w-72 bg-white/70 backdrop-blur-xl border-r border-white/60 shadow-lg shadow-slate-200/30 h-screen sticky top-0 flex flex-col">
-      <div className="px-6 py-6 border-b border-white/60">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-slate-900 text-white rounded-xl shadow-lg shadow-slate-300/70">
-            <Brain size={22} />
+    <aside className="w-64 bg-white border-r border-slate-200 h-screen sticky top-0 flex flex-col overflow-y-auto">
+      <div className="px-5 py-5 border-b border-slate-200">
+        <div className="flex items-center gap-2">
+          <div className="p-2 bg-slate-900 text-white rounded-lg">
+            <Brain size={20} />
           </div>
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.3em] text-slate-500">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-500">
               Second Brain
             </p>
-            <p className="text-lg font-bold text-slate-900 leading-tight">HoD Command</p>
+            <p className="text-base font-bold text-slate-900 leading-tight">HoD Command</p>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-6">
+      <nav className="flex-1 px-3 py-4 space-y-5">
         {navGroups.map((group) => (
-          <div key={group.title} className="space-y-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.25em] text-slate-500 px-2">
+          <div key={group.title} className="space-y-2">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500 px-2">
               {group.title}
             </div>
-            <div className="space-y-2">
+            <div className="space-y-1">
               {group.items.map((item) => {
                 const Icon = item.icon;
                 const isActive = activeTab === item.id;
@@ -70,25 +76,38 @@ export function Sidebar({ activeTab, onChange }) {
                   <button
                     key={item.id}
                     onClick={() => onChange?.(item.id)}
-                    className={`w-full text-left p-3.5 rounded-2xl border transition-all group ${
+                    className={`w-full text-left p-3 rounded-lg border transition-all ${
                       isActive
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-lg shadow-slate-300/70'
-                        : 'bg-white/70 text-slate-700 border-slate-100 hover:border-slate-200 hover:-translate-y-[1px]'
+                        ? 'bg-slate-900 text-white border-slate-900'
+                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <Icon
-                        size={18}
-                        className={isActive ? 'text-white' : 'text-slate-400'}
-                      />
-                      <div>
-                        <div className="text-sm font-semibold tracking-tight">{item.label}</div>
-                        {item.note && (
-                          <div className={`text-[11px] ${isActive ? 'text-slate-200' : 'text-slate-500'}`}>
-                            {item.note}
-                          </div>
-                        )}
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Icon
+                          size={16}
+                          className="flex-shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold truncate">{item.label}</div>
+                          {item.note && (
+                            <div className={`text-[10px] truncate ${isActive ? 'text-slate-300' : 'text-slate-500'}`}>
+                              {item.note}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                      {item.id === 'tasks' && waitingCount > 0 && (
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex-shrink-0 ${
+                            isActive
+                              ? 'bg-white/20 border-white/40 text-white'
+                              : 'bg-amber-100 border-amber-200 text-amber-700'
+                          }`}
+                        >
+                          {waitingCount}
+                        </span>
+                      )}
                     </div>
                   </button>
                 );
@@ -98,18 +117,18 @@ export function Sidebar({ activeTab, onChange }) {
         ))}
       </nav>
 
-      <div className="px-6 py-5 border-t border-white/60 bg-white/70">
-        <div className="text-[11px] uppercase font-semibold text-slate-500 tracking-[0.25em]">
-          Focus
+      <div className="px-4 py-4 border-t border-slate-200 bg-white">
+        <div className="text-[10px] uppercase font-semibold text-slate-500 tracking-[0.2em]">
+          System
         </div>
-        <div className="mt-3 p-3 rounded-xl border border-slate-100 bg-slate-900 text-white shadow-inner shadow-slate-800/40">
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-200">
-            Active Model
+        <div className="mt-3 p-3 rounded-lg border border-slate-200 bg-slate-900 text-white">
+          <div className="text-[10px] uppercase tracking-[0.15em] text-slate-300">
+            AI Model
           </div>
-          <div className="font-bold mt-1 text-lg">Gemini 2.5</div>
-          <div className="flex items-center gap-2 text-xs text-emerald-300 mt-1">
-            <span className="w-2 h-2 rounded-full bg-emerald-300 animate-pulse" />
-            Live
+          <div className="font-bold mt-1 text-sm">Gemini 2.5</div>
+          <div className="flex items-center gap-2 text-[10px] text-emerald-400 mt-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            Connected
           </div>
         </div>
       </div>

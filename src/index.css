@@ -21,20 +21,24 @@
   --text-muted: #485269;
 }
 
+html, body {
+  height: 100%;
+}
+
 * {
-  font-family: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI',
-    sans-serif;
+  font-family: 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 
 body {
   margin: 0;
-  background: radial-gradient(80% 120% at 20% 20%, #f0f5ff, #eef2f7 40%, #e7ecf5 70%, #e1e7f1),
-    linear-gradient(135deg, #f8fbff 0%, #edf1f8 100%);
+  background: #f8fafc;
   color: var(--text-strong);
+  overflow: hidden;
 }
 
 #root {
   min-height: 100vh;
+  height: 100vh;
 }
 
 ::selection {
