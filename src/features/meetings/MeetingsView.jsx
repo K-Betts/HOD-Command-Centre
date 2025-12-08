@@ -14,6 +14,7 @@ import {
   NotebookPen,
   Plus,
   Sparkles,
+  Search,
   Users,
 } from 'lucide-react';
 import { BrainCard } from '../../components/ui/BrainCard';
@@ -46,7 +47,8 @@ const focusToInteractionType = (focus = '') => {
 const normalize = (value) => (value || '').toString().trim().toLowerCase();
 
 export function MeetingsView({ user, staff = [], logInteraction, addTask, tasks = [] }) {
-  const { meetings, addMeeting, updateMeeting, loading } = useMeetings(user);
+  const meetingsApi = useMeetings(user);
+  const { meetings, addMeeting, updateMeeting, loading, deleteMeeting } = meetingsApi;
   const { addToast } = useToast();
 
   const [selectedMeetingId, setSelectedMeetingId] = useState(null);
@@ -55,6 +57,7 @@ export function MeetingsView({ user, staff = [], logInteraction, addTask, tasks 
   const [exportingBook, setExportingBook] = useState(false);
   const [importing, setImporting] = useState(false);
   const [ingestionSaving, setIngestionSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [meetingForm, setMeetingForm] = useState({
     title: 'Department Meeting',
@@ -111,6 +114,29 @@ export function MeetingsView({ user, staff = [], logInteraction, addTask, tasks 
   const scrollToAgendaBuilder = () => {
     if (agendaCardRef.current) {
       agendaCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  };
+
+  const handleDeleteMeeting = async (meeting) => {
+    if (!meeting?.id) return;
+    const confirmed = window.confirm(
+      'This will permanently delete this meeting, including its agenda, minutes, actions, attachments, and staff notes. This cannot be undone. Continue?'
+    );
+    if (!confirmed) return;
+
+    try {
+      if (typeof deleteMeeting === 'function') {
+        await deleteMeeting(meeting.id);
+        addToast('success', 'Meeting deleted.');
+      } else {
+        addToast(
+          'error',
+          'Delete is not yet wired to Firestore. Add a deleteMeeting function to useMeetings to enable hard delete.'
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      addToast('error', 'Failed to delete meeting.');
     }
   };
 
@@ -490,11 +516,29 @@ export function MeetingsView({ user, staff = [], logInteraction, addTask, tasks 
         </div>
 
         {/* Section 2: Meeting Archive */}
-        <div className="flex-1 min-h-0">
+        <div className="flex-1 min-h-0 flex flex-col gap-3">
+          <div className="flex justify-end">
+            <div className="relative w-full sm:w-72">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-3 pr-9 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                placeholder="Search archived meetings..."
+              />
+              <Search
+                size={14}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
+            </div>
+          </div>
+
           <MeetingArchiveAccordion
             meetings={meetings}
             onUpdate={updateMeeting}
             staff={staff}
+            searchQuery={searchQuery}
+            onDelete={handleDeleteMeeting}
           />
         </div>
       </div>
@@ -524,18 +568,24 @@ export function MeetingsView({ user, staff = [], logInteraction, addTask, tasks 
   );
 }
 
-function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
+function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [], searchQuery = '', onDelete }) {
   const { addToast } = useToast();
   const [expandedId, setExpandedId] = useState(null);
   const [drafts, setDrafts] = useState({});
   const attendeeInputRef = useRef(null);
 
+  const normalizedQuery = (searchQuery || '').trim().toLowerCase();
+
   const archivedMeetings = useMemo(
-    () =>
-      [...(meetings || [])]
+    () => {
+      const base = [...(meetings || [])]
         .filter((m) => m.type === 'archive' || m.minutesSummary || (m.agenda || []).some((item) => item.minutes))
-        .sort((a, b) => toMillis(b.meetingDate || b.createdAt) - toMillis(a.meetingDate || a.createdAt)),
-    [meetings]
+        .sort((a, b) => toMillis(b.meetingDate || b.createdAt) - toMillis(a.meetingDate || a.createdAt));
+
+      if (!normalizedQuery) return base;
+      return base.filter((m) => meetingMatchesQuery(m, normalizedQuery));
+    },
+    [meetings, normalizedQuery]
   );
 
   const initializeDraft = (meeting) => {
@@ -549,6 +599,7 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
           location: meeting.location,
           attendees: [...(meeting.attendees || [])],
           minutesSummary: meeting.minutesSummary,
+          agenda: ensureIds(meeting.agenda || []),
         },
       }));
     }
@@ -559,6 +610,23 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
       ...prev,
       [meetingId]: { ...prev[meetingId], [field]: value },
     }));
+  };
+
+  const updateAgendaMinutes = (meetingId, itemId, value) => {
+    setDrafts((prev) => {
+      const draft = prev[meetingId] || {};
+      const agenda = ensureIds(draft.agenda || []);
+      const updatedAgenda = agenda.map((item) =>
+        item.id === itemId ? { ...item, minutes: value } : item
+      );
+      return {
+        ...prev,
+        [meetingId]: {
+          ...draft,
+          agenda: updatedAgenda,
+        },
+      };
+    });
   };
 
   const addAttendee = (meetingId, name) => {
@@ -588,6 +656,14 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
     if (!draft) return;
 
     try {
+      const originalAgenda = ensureIds(meeting.agenda || []);
+      const draftAgenda = ensureIds(draft.agenda || originalAgenda);
+
+      const savedAgenda = originalAgenda.map((item) => {
+        const match = draftAgenda.find((a) => a.id === item.id);
+        return match ? { ...item, minutes: match.minutes ?? '' } : item;
+      });
+
       await onUpdate(meeting.id, {
         ...meeting,
         title: draft.title,
@@ -596,6 +672,7 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
         location: draft.location,
         attendees: draft.attendees,
         minutesSummary: draft.minutesSummary,
+        agenda: savedAgenda,
       });
       setDrafts((prev) => {
         const updated = { ...prev };
@@ -612,23 +689,39 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
   const hasUnsavedChanges = (meetingId, meeting) => {
     const draft = drafts[meetingId];
     if (!draft) return false;
-    return (
+
+    const baseChanged =
       draft.title !== meeting.title ||
       draft.meetingDate !== meeting.meetingDate ||
       draft.startTime !== meeting.startTime ||
       draft.location !== meeting.location ||
       draft.minutesSummary !== (meeting.minutesSummary || '') ||
-      JSON.stringify(draft.attendees) !== JSON.stringify(meeting.attendees || [])
-    );
+      JSON.stringify(draft.attendees) !== JSON.stringify(meeting.attendees || []);
+
+    const originalAgenda = ensureIds(meeting.agenda || []);
+    const draftAgenda = ensureIds(draft.agenda || originalAgenda);
+
+    const agendaChanged =
+      draftAgenda.length !== originalAgenda.length ||
+      draftAgenda.some((item) => {
+        const original = originalAgenda.find((o) => o.id === item.id) || {};
+        return (item.minutes || '') !== (original.minutes || '');
+      });
+
+    return baseChanged || agendaChanged;
   };
 
   if (archivedMeetings.length === 0) {
     return (
       <BrainCard className="p-8 text-center border-dashed border-2 border-slate-200">
         <NotebookPen size={28} className="text-slate-300 mx-auto mb-2" />
-        <h3 className="text-slate-700 font-semibold">No meeting archive yet</h3>
+        <h3 className="text-slate-700 font-semibold">
+          {normalizedQuery ? 'No meetings match your search' : 'No meeting archive yet'}
+        </h3>
         <p className="text-sm text-slate-500 mt-1">
-          Create a new meeting above to start building your archive.
+          {normalizedQuery
+            ? 'Try a different keyword, or clear the search box to see all archived meetings.'
+            : 'Create a new meeting above to start building your archive.'}
         </p>
       </BrainCard>
     );
@@ -639,7 +732,16 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
       {archivedMeetings.map((meeting) => {
         const isExpanded = expandedId === meeting.id;
         const hasChanges = hasUnsavedChanges(meeting.id, meeting);
-        const draft = drafts[meeting.id] || { title: meeting.title, meetingDate: meeting.meetingDate };
+        const draft =
+          drafts[meeting.id] || {
+            title: meeting.title,
+            meetingDate: meeting.meetingDate,
+            startTime: meeting.startTime,
+            location: meeting.location,
+            attendees: [...(meeting.attendees || [])],
+            minutesSummary: meeting.minutesSummary || '',
+            agenda: ensureIds(meeting.agenda || []),
+          };
 
         return (
           <BrainCard key={meeting.id} className="overflow-hidden">
@@ -809,19 +911,27 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
                 </div>
 
                 {/* Agenda Items */}
-                {(meeting.agenda || []).length > 0 && (
+                {(draft.agenda || []).length > 0 && (
                   <div>
                     <label className="block text-xs font-bold text-slate-600 uppercase mb-2">
                       Agenda Items
                     </label>
                     <div className="space-y-2">
-                      {(meeting.agenda || []).map((item) => (
-                        <div key={item.id} className="p-3 rounded-lg bg-white border border-slate-200">
-                          <div className="text-sm font-semibold text-slate-800">{item.title || 'Agenda item'}</div>
-                          {item.owner && <div className="text-[11px] text-slate-500">Owner: {item.owner}</div>}
-                          {item.minutes && (
-                            <div className="text-sm text-slate-700 mt-2 whitespace-pre-wrap">{item.minutes}</div>
+                      {(draft.agenda || []).map((item) => (
+                        <div key={item.id} className="p-3 rounded-lg bg-white border border-slate-200 space-y-2">
+                          <div className="text-sm font-semibold text-slate-800">
+                            {item.title || 'Agenda item'}
+                          </div>
+                          {item.owner && (
+                            <div className="text-[11px] text-slate-500">Owner: {item.owner}</div>
                           )}
+                          {/* Editable notes for each agenda item */}
+                          <textarea
+                            value={item.minutes || ''}
+                            onChange={(e) => updateAgendaMinutes(meeting.id, item.id, e.target.value)}
+                            className="w-full p-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500 min-h-[80px]"
+                            placeholder="Notes / minutes for this agenda item..."
+                          />
                         </div>
                       ))}
                     </div>
@@ -859,9 +969,18 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
                   </div>
                 )}
 
-                {/* Save Button */}
-                {hasChanges && (
-                  <div className="flex justify-end">
+                {/* Delete / Save Buttons */}
+                <div className="flex justify-between items-center">
+                  {onDelete && (
+                    <button
+                      type="button"
+                      onClick={() => onDelete(meeting)}
+                      className="px-3 py-2 bg-rose-50 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl hover:bg-rose-100"
+                    >
+                      Delete meeting
+                    </button>
+                  )}
+                  {hasChanges && (
                     <button
                       type="button"
                       onClick={() => handleSaveChanges(meeting)}
@@ -869,8 +988,8 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
                     >
                       <CheckCircle2 size={16} /> Save All Changes
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
           </BrainCard>
@@ -879,6 +998,49 @@ function MeetingArchiveAccordion({ meetings = [], onUpdate, staff = [] }) {
     </div>
   );
 }
+
+const meetingMatchesQuery = (meeting, query) => {
+  if (!meeting || !query) return true;
+
+  const parts = [];
+
+  if (meeting.title) parts.push(meeting.title);
+  if (meeting.meetingDate) parts.push(meeting.meetingDate);
+  if (meeting.startTime) parts.push(meeting.startTime);
+  if (meeting.location) parts.push(meeting.location);
+  if (Array.isArray(meeting.attendees)) parts.push(meeting.attendees.join(' '));
+  if (meeting.minutesSummary) parts.push(meeting.minutesSummary);
+
+  if (Array.isArray(meeting.agenda)) {
+    meeting.agenda.forEach((item) => {
+      if (!item) return;
+      if (item.title) parts.push(item.title);
+      if (item.owner) parts.push(item.owner);
+      if (item.minutes) parts.push(item.minutes);
+    });
+  }
+
+  if (Array.isArray(meeting.actions)) {
+    meeting.actions.forEach((action) => {
+      if (!action) return;
+      if (action.task) parts.push(action.task);
+      if (action.owner) parts.push(action.owner);
+      if (action.dueDate) parts.push(action.dueDate);
+    });
+  }
+
+  if (Array.isArray(meeting.staffNotes)) {
+    meeting.staffNotes.forEach((note) => {
+      if (!note) return;
+      if (note.staffName) parts.push(note.staffName);
+      if (note.focus) parts.push(note.focus);
+      if (note.note) parts.push(note.note);
+    });
+  }
+
+  const haystack = parts.join(' ').toLowerCase();
+  return haystack.includes(query);
+};
 
 function MeetingAgendaBuilder({ staff, form, onChange, onSubmit }) {
   const attendeeInputRef = useRef(null);
@@ -903,7 +1065,7 @@ function MeetingAgendaBuilder({ staff, form, onChange, onSubmit }) {
   const addAgendaRow = () => {
     onChange((prev) => ({
       ...prev,
-      agenda: [...(prev.agenda || []), { id: safeId(), title: '', owner: '', duration: '5 min' }],
+      agenda: [...(prev.agenda || []), { id: safeId(), title: '', owner: '', duration: '5 min', minutes: '' }],
     }));
   };
 
@@ -1017,6 +1179,7 @@ function MeetingAgendaBuilder({ staff, form, onChange, onSubmit }) {
           </div>
         </div>
 
+        {/* Agenda with notes per item */}
         <div className="space-y-2">
           <div className="flex items-center justify-between">
             <label className="text-xs font-bold text-slate-500 uppercase">Agenda</label>
@@ -1032,33 +1195,43 @@ function MeetingAgendaBuilder({ staff, form, onChange, onSubmit }) {
             {(form.agenda || []).map((item) => (
               <div
                 key={item.id}
-                className="grid grid-cols-[1.2fr,0.7fr,0.5fr,auto] gap-2 items-center bg-white border border-slate-100 rounded-xl p-3"
+                className="bg-white border border-slate-100 rounded-xl p-3 space-y-2"
               >
-                <input
-                  value={item.title}
-                  onChange={(e) => updateAgendaItem(item.id, 'title', e.target.value)}
-                  className="p-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500"
-                  placeholder="Agenda item"
+                <div className="grid grid-cols-[1.2fr,0.7fr,0.5fr,auto] gap-2 items-center">
+                  <input
+                    value={item.title}
+                    onChange={(e) => updateAgendaItem(item.id, 'title', e.target.value)}
+                    className="p-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500"
+                    placeholder="Agenda item"
+                  />
+                  <input
+                    value={item.owner}
+                    onChange={(e) => updateAgendaItem(item.id, 'owner', e.target.value)}
+                    className="p-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500"
+                    placeholder="Owner"
+                  />
+                  <input
+                    value={item.duration}
+                    onChange={(e) => updateAgendaItem(item.id, 'duration', e.target.value)}
+                    className="p-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500"
+                    placeholder="10 min"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeAgendaRow(item.id)}
+                    className="text-slate-400 hover:text-rose-500 p-1"
+                  >
+                    x
+                  </button>
+                </div>
+
+                {/* Notes field stored in item.minutes */}
+                <textarea
+                  value={item.minutes || ''}
+                  onChange={(e) => updateAgendaItem(item.id, 'minutes', e.target.value)}
+                  className="w-full p-2 border border-slate-200 rounded-lg text-xs md:text-sm focus:ring-1 focus:ring-emerald-500 min-h-[60px]"
+                  placeholder="Notes for this agenda item (discussion points, key questions, etc.)"
                 />
-                <input
-                  value={item.owner}
-                  onChange={(e) => updateAgendaItem(item.id, 'owner', e.target.value)}
-                  className="p-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500"
-                  placeholder="Owner"
-                />
-                <input
-                  value={item.duration}
-                  onChange={(e) => updateAgendaItem(item.id, 'duration', e.target.value)}
-                  className="p-2 border border-slate-200 rounded-lg text-sm focus:ring-1 focus:ring-emerald-500"
-                  placeholder="10 min"
-                />
-                <button
-                  type="button"
-                  onClick={() => removeAgendaRow(item.id)}
-                  className="text-slate-400 hover:text-rose-500 p-1"
-                >
-                  x
-                </button>
               </div>
             ))}
           </div>

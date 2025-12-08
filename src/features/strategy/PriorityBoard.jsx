@@ -538,12 +538,12 @@ export function PriorityBoard({
                               : 'bg-emerald-50 text-emerald-700 border-emerald-200';
                           return (
                             <tr key={p.id} className="align-top hover:bg-slate-50/60">
-                              <td className="px-2 py-2 min-w-[220px]">
-                                <div className="flex items-center gap-1.5 mb-1.5">
+                              <td className="px-3 py-3 min-w-[240px]">
+                                <div className="flex items-center gap-2 mb-2">
                                   <select
                                     value={p.priorityId || ''}
                                     onChange={(e) => handleFieldBlur(p.id, 'priorityId', e.target.value)}
-                                    className="flex-1 border border-slate-200 rounded px-1.5 py-0.5 text-xs focus:ring-1 focus:ring-indigo-200 bg-white"
+                                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-xs focus:ring-1 focus:ring-indigo-200 bg-white"
                                   >
                                     <option value="">Unassigned</option>
                                     {schoolPriorities.map((sp) => (
@@ -552,7 +552,7 @@ export function PriorityBoard({
                                       </option>
                                     ))}
                                   </select>
-                                  <span className="text-[10px] text-slate-400 truncate">
+                                  <span className="text-[11px] text-slate-400">
                                     {p.priorityName || group.title || 'Priority'}
                                   </span>
                                 </div>
@@ -561,83 +561,83 @@ export function PriorityBoard({
                                   onChange={(e) => handleFieldChange(p.id, 'objective', e.target.value)}
                                   onBlur={(e) => handleFieldBlur(p.id, 'objective', e.target.value)}
                                   placeholder="Objective"
-                                  className="w-full border border-slate-200 rounded px-1.5 py-0.5 text-xs mb-1 focus:ring-1 focus:ring-indigo-200"
+                                  className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm mb-2 focus:ring-1 focus:ring-indigo-200"
                                 />
                                 <textarea
                                   value={p.action || ''}
                                   onChange={(e) => handleFieldChange(p.id, 'action', e.target.value)}
                                   onBlur={(e) => handleFieldBlur(p.id, 'action', e.target.value)}
                                   placeholder="Action"
-                                  rows={1}
-                                  className="w-full border border-slate-200 rounded px-1.5 py-0.5 text-xs focus:ring-1 focus:ring-indigo-200 resize-none"
+                                  rows={2}
+                                  className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm focus:ring-1 focus:ring-indigo-200"
                                 />
                                 {p.vision && (
-                                  <div className="text-[10px] text-slate-500 mt-0.5 truncate">Vision: {p.vision}</div>
+                                  <div className="text-[11px] text-slate-500 mt-1">Vision: {p.vision}</div>
                                 )}
                               </td>
-                              <td className="px-2 py-2 min-w-[140px]">
+                              <td className="px-3 py-3 min-w-[180px]">
                                 <input
                                   value={p.leadName || p.leadInitials || p.leadRaw || ''}
                                   onChange={(e) => handleFieldChange(p.id, 'leadName', e.target.value)}
                                   onBlur={(e) => handleFieldBlur(p.id, 'leadName', e.target.value)}
-                                  placeholder="Lead"
-                                  className="w-full border border-slate-200 rounded px-1.5 py-0.5 text-xs focus:ring-1 focus:ring-indigo-200"
+                                  placeholder="Lead initials"
+                                  className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm focus:ring-1 focus:ring-indigo-200"
                                 />
-                                <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-1 flex-wrap">
-                                  <span className={`px-1.5 py-0.5 rounded text-[9px] border ${badgeClass}`}>
+                                <div className="text-[11px] text-slate-500 mt-2 flex items-center gap-2 flex-wrap">
+                                  <span className={`px-2 py-0.5 rounded-full border ${badgeClass}`}>
                                     {assignmentLabel}
                                   </span>
-                                  <span>{p.leadInitials || '—'}</span>
+                                  <span>{p.isWholeTeam ? 'Whole Team' : p.leadInitials || 'Unmapped'}</span>
                                   {p.leadStaffId && (
-                                    <span className="px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200 text-[8px]">
+                                    <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px]">
                                       Linked
                                     </span>
                                   )}
                                 </div>
                               </td>
-                              <td className="px-2 py-2 min-w-[150px]">
-                                <div className="flex gap-1.5">
+                              <td className="px-3 py-3 min-w-[180px]">
+                                <div className="flex gap-2">
                                   <input
                                     type="date"
                                     value={p.reviewDate || ''}
                                     onChange={(e) => handleFieldChange(p.id, 'reviewDate', e.target.value)}
                                     onBlur={(e) => handleFieldBlur(p.id, 'reviewDate', e.target.value)}
-                                    className="w-28 border border-slate-200 rounded px-1.5 py-0.5 text-xs focus:ring-1 focus:ring-indigo-200"
+                                    className="w-36 border border-slate-200 rounded-lg px-2 py-1 text-sm focus:ring-1 focus:ring-indigo-200"
                                   />
                                   <input
                                     value={p.reviewFrequency || ''}
                                     onChange={(e) => handleFieldChange(p.id, 'reviewFrequency', e.target.value)}
                                     onBlur={(e) => handleFieldBlur(p.id, 'reviewFrequency', e.target.value)}
-                                    placeholder="Freq"
-                                    className="flex-1 border border-slate-200 rounded px-1.5 py-0.5 text-xs focus:ring-1 focus:ring-indigo-200"
+                                    placeholder="Frequency"
+                                    className="flex-1 border border-slate-200 rounded-lg px-2 py-1 text-sm focus:ring-1 focus:ring-indigo-200"
                                   />
                                 </div>
                                 {p.nextReviewDate && (
-                                  <div className="text-[9px] text-slate-500 mt-1 flex items-center gap-0.5">
-                                    <Clock4 size={10} /> {p.nextReviewDate.toISOString().slice(0, 10)}{' '}
+                                  <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
+                                    <Clock4 size={12} /> Next: {p.nextReviewDate.toISOString().slice(0, 10)}{' '}
                                     {p.dueSoon && (
-                                      <span className="text-amber-700 font-semibold">⚠</span>
+                                      <span className="ml-1 text-amber-700 font-semibold">Due soon</span>
                                     )}
                                   </div>
                                 )}
                               </td>
-                              <td className="px-2 py-2 min-w-[180px]">
+                              <td className="px-3 py-3 min-w-[200px]">
                                 <textarea
                                   value={p.evidence || ''}
                                   onChange={(e) => handleFieldChange(p.id, 'evidence', e.target.value)}
                                   onBlur={(e) => handleFieldBlur(p.id, 'evidence', e.target.value)}
-                                  rows={1}
-                                  placeholder="Evidence"
-                                  className="w-full border border-slate-200 rounded px-1.5 py-0.5 text-xs focus:ring-1 focus:ring-indigo-200 resize-none"
+                                  rows={2}
+                                  placeholder="Evidence / impact measure"
+                                  className="w-full border border-slate-200 rounded-lg px-2 py-1 text-sm focus:ring-1 focus:ring-indigo-200"
                                 />
                               </td>
-                              <td className="px-2 py-2 min-w-[160px]">
-                                <div className="flex items-center gap-1.5 mb-1.5">
+                              <td className="px-3 py-3 min-w-[180px]">
+                                <div className="flex items-center gap-2 mb-2">
                                   <select
                                     value={p.rag || 'Amber'}
                                     onChange={(e) => handleFieldChange(p.id, 'rag', e.target.value)}
                                     onBlur={(e) => handleFieldBlur(p.id, 'rag', e.target.value)}
-                                    className={`w-24 border rounded px-1.5 py-0.5 text-xs ${ragStyles[p.rag] || 'border-slate-200'}`}
+                                    className={`w-28 border rounded-lg px-2 py-1 text-sm ${ragStyles[p.rag] || 'border-slate-200'}`}
                                   >
                                     {['Green', 'Amber', 'Red'].map((opt) => (
                                       <option key={opt} value={opt}>
@@ -645,40 +645,40 @@ export function PriorityBoard({
                                       </option>
                                     ))}
                                   </select>
+                                  {Array.isArray(p.progressNotes) && p.progressNotes.length > 0 && (
+                                    <span className="text-[11px] text-slate-500">
+                                      Last: {new Date(p.progressNotes[p.progressNotes.length - 1].date).toISOString().slice(0, 10)}
+                                    </span>
+                                  )}
                                 </div>
-                                <div className="flex flex-wrap gap-1">
+                                <div className="flex flex-wrap gap-2">
                                   <button
                                     onClick={() => handlePromoteTask(p)}
                                     disabled={savingId === p.id}
-                                    title="Create task"
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900 text-white text-xs font-semibold hover:bg-slate-800 disabled:opacity-60"
                                   >
-                                    {savingId === p.id ? <Loader2 className="animate-spin" size={11} /> : <ClipboardCheck size={11} />}
-                                    <span className="hidden sm:inline">Task</span>
+                                    {savingId === p.id ? <Loader2 className="animate-spin" size={14} /> : <ClipboardCheck size={14} />}
+                                    Task
                                   </button>
                                   <button
                                     onClick={() => handleLogCheckIn(p)}
                                     disabled={savingId === p.id}
-                                    title="Log check-in"
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-white border border-slate-200 hover:bg-slate-50 disabled:opacity-60"
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-xs font-semibold hover:bg-slate-50 disabled:opacity-60"
                                   >
-                                    {savingId === p.id ? <Loader2 className="animate-spin" size={11} /> : <AlertTriangle size={11} />}
-                                    <span className="hidden sm:inline">Check</span>
+                                    {savingId === p.id ? <Loader2 className="animate-spin" size={14} /> : <AlertTriangle size={14} />}
+                                    Check-in
                                   </button>
                                   <button
                                     onClick={() => logProgress(p)}
-                                    title="Log progress"
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-white border border-indigo-200 hover:bg-indigo-50"
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-xs font-semibold hover:bg-indigo-50"
                                   >
-                                    <span className="hidden sm:inline">Progress</span>
-                                    <span className="sm:hidden">+</span>
+                                    Log Progress
                                   </button>
                                   <button
                                     onClick={() => handleDeletePriority(p.id)}
-                                    title="Delete"
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100"
+                                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-xs font-semibold text-rose-700 hover:bg-rose-100"
                                   >
-                                    <Trash2 size={11} />
+                                    <Trash2 size={14} /> Delete
                                   </button>
                                 </div>
                               </td>

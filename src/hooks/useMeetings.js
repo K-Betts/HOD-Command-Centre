@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { serverTimestamp } from 'firebase/firestore';
-import { getDownloadURL, ref, uploadBytes } from 'firebase/storage';
+import { getDownloadURL, ref, uploadBytes, deleteObject } from 'firebase/storage';
 import { useUserCollection } from './shared/useUserCollection';
 import { storage } from '../services/firebase';
 import { useAcademicYear } from '../context/AcademicYearContext';
@@ -77,6 +77,25 @@ export function useMeetings(user) {
 
   const deleteMeeting = async (id) => {
     if (!id) return;
+
+    // Find the meeting so we can also clean up any stored attachments
+    const meeting = (data || []).find((m) => m.id === id);
+
+    // Best-effort delete of any files in Firebase Storage that belong to this meeting
+    if (meeting && Array.isArray(meeting.attachments)) {
+      for (const attachment of meeting.attachments) {
+        if (!attachment?.storagePath) continue;
+        try {
+          const fileRef = ref(storage, attachment.storagePath);
+          await deleteObject(fileRef);
+        } catch (err) {
+          // Don't block deletion of the meeting if a file can't be removed
+          console.error('Failed to delete attachment from storage', attachment.storagePath, err);
+        }
+      }
+    }
+
+    // Finally remove the Firestore document via the shared collection helper
     await remove(id);
   };
 
