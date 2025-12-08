@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Brain, Plus, Wand2 } from 'lucide-react';
 import { analyzeBrainDump } from '../../services/ai';
 import { useStaff } from '../../hooks/useStaff';
+import { useTasks } from '../../hooks/useTasks';
+import { useScheduleEvents } from '../../hooks/useScheduleEvents';
+import { getOptimizedContext } from '../../utils/aiContext';
 import { IngestionReviewModal } from './IngestionReviewModal';
 
 export function BrainDumpInput({ user, staff, context, updateContext, compact = false }) {
@@ -12,6 +15,8 @@ export function BrainDumpInput({ user, staff, context, updateContext, compact = 
   const [rawAiText, setRawAiText] = useState('');
   const [error, setError] = useState('');
   const { logInteraction } = useStaff(user);
+  const { tasks } = useTasks(user?.uid);
+  const { scheduleEvents } = useScheduleEvents(user?.uid);
 
   const handleDump = async (e) => {
     e.preventDefault();
@@ -21,7 +26,10 @@ export function BrainDumpInput({ user, staff, context, updateContext, compact = 
     setError('');
 
     try {
-      const aiResponse = await analyzeBrainDump(input, staff, context || {});
+      const optimizedData = getOptimizedContext(tasks, staff, scheduleEvents);
+      const combinedContext = { ...context, ...optimizedData };
+      
+      const aiResponse = await analyzeBrainDump(input, staff, combinedContext);
       const safeResponse = applyChallengeOverrides(aiResponse || {}, input);
       setReviewData(safeResponse);
       setRawAiText(

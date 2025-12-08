@@ -19,29 +19,39 @@ function notifyAiError(message) {
   }
 }
 
-async function fetchJson(body, config) {
+const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
   try {
-    const response = await fetch(`${modelPath}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: body }] }], ...config }),
-    });
-
-    if (!response.ok) {
-      notifyAiError('AI Service Unavailable - check connection.');
-      return {};
+    const res = await fetch(url, options);
+    if (res.status === 429) throw new Error('RATE_LIMIT');
+    if (!res.ok) throw new Error('API_ERROR');
+    return res.json();
+  } catch (err) {
+    if (retries > 0 && err.message === 'RATE_LIMIT') {
+      await new Promise(r => setTimeout(r, backoff));
+      return fetchWithRetry(url, options, retries - 1, backoff * 2);
     }
+    throw err;
+  }
+};
 
-    try {
-      return await response.json();
-    } catch (parseErr) {
-      console.error('AI response JSON parse failed', parseErr);
-      notifyAiError('AI Service Unavailable - check connection.');
-      return {};
-    }
+async function fetchJson(body, config) {
+  const url = `${modelPath}?key=${apiKey}`;
+  const options = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ contents: [{ parts: [{ text: body }] }], ...config }),
+  };
+
+  try {
+    const data = await fetchWithRetry(url, options);
+    return data;
   } catch (err) {
     console.error('AI request failed', err);
-    notifyAiError('AI Service Unavailable - check connection.');
+    let message = 'AI Service Unavailable - check connection.';
+    if (err.message === 'RATE_LIMIT') {
+      message = 'AI service is busy, please try again in a moment.';
+    }
+    notifyAiError(message);
     return {};
   }
 }
@@ -76,19 +86,28 @@ export async function analyzeContext(text, type) {
 }
 
 export async function analyzeBrainDump(text, staffList = [], context = {}) {
-  const staffContext = staffList
-    .map((s) => `${s.name} (Teaches: ${s.yearGroups?.join(', ') || 'None'})`)
-    .join('; ');
+  const staffContext = context.staffDirectory
+    ? `Staff Directory (for assignment): ${JSON.stringify(context.staffDirectory)}`
+    : `Staff available: ${staffList
+        .map((s) => `${s.name} (Teaches: ${s.yearGroups?.join(', ') || 'None'})`)
+        .join('; ')}`;
 
   const currentDateIso = new Date().toISOString();
 
-  const calendarContext = context.events
-    ? context.events.map((e) => `${e.date || e.startDateTime}: ${e.event || e.title}`).join('; ')
+  const calendarContext = context.todayEvents
+    ? `Today's/Tomorrow's Events: ${context.todayEvents.join('; ')}`
+    : context.events
+    ? `Calendar: ${context.events.map((e) => `${e.date || e.startDateTime}: ${e.event || e.title}`).join('; ')}`
     : 'No calendar data.';
 
   const goalContext = context.goals
     ? context.goals.map((g) => `${g.title}`).join('; ')
     : 'No specific goals.';
+    
+  const existingTasksContext = context.existingTaskTitles
+    ? `Existing task titles (for de-duplication): ${context.existingTaskTitles.join('; ')}`
+    : 'No existing tasks provided.';
+
 
   const prompt = `
 You are an executive assistant for a British School Head of Department.
@@ -97,9 +116,10 @@ TASK: Parse the input into MULTIPLE distinct items and return STRICT JSON. NEVER
 
 CONTEXT:
 - Current date: ${currentDateIso}
-- Calendar: ${calendarContext}
+- ${calendarContext}
 - Goals: ${goalContext}
-- Staff: ${staffContext}
+- ${staffContext}
+- ${existingTasksContext}
 
 INPUT (messy, multiline):
 """
