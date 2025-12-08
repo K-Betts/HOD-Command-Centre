@@ -42,6 +42,39 @@ export function DepartmentCalendar({ user }) {
   const [selectedTermIndex, setSelectedTermIndex] = useState(0);
   const [autoFilling, setAutoFilling] = useState(false);
   const tableRef = useRef(null);
+  const printRef = useRef(null);
+
+  const autoGrow = (element) => {
+    if (!element) return;
+    element.style.height = 'auto';
+    element.style.height = `${element.scrollHeight}px`;
+  };
+
+  const mergeCellText = (existingValue = '', incomingValue = '') => {
+    const existingLines = existingValue
+      .toString()
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const incomingLines = incomingValue
+      .toString()
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    const seen = new Set(existingLines);
+    const merged = [...existingLines];
+
+    incomingLines.forEach((line) => {
+      if (!seen.has(line)) {
+        seen.add(line);
+        merged.push(line);
+      }
+    });
+
+    return merged.join('\n');
+  };
 
   // Calculate selected term and weeks
   const selectedTerm = useMemo(() => {
@@ -143,16 +176,28 @@ export function DepartmentCalendar({ user }) {
     setAutoFilling(true);
     try {
       const updatedPlan = { ...departmentPlan };
-      
+
       weeks.forEach((week) => {
-        const weekData = weeklyData.find(w => w.weekNumber === week.index);
-        if (weekData) {
-          const weekKey = `week_${week.index}`;
-          updatedPlan[weekKey] = {
-            ...(updatedPlan[weekKey] || {}),
-            ...weekData.autoFilledData,
-          };
-        }
+        const weekData = weeklyData.find((w) => w.weekNumber === week.index);
+        if (!weekData || !weekData.autoFilledData) return;
+
+        const weekKey = `week_${week.index}`;
+        const existingWeek = updatedPlan[weekKey] || {};
+        const incomingWeek = weekData.autoFilledData || {};
+        const mergedWeek = { ...existingWeek };
+
+        // For each known column, merge existing and incoming text without duplicates
+        COLUMN_KEYS.forEach((colKey) => {
+          const existingValue = existingWeek[colKey] || '';
+          const incomingValue = incomingWeek[colKey] || '';
+          const mergedValue = mergeCellText(existingValue, incomingValue);
+
+          if (mergedValue) {
+            mergedWeek[colKey] = mergedValue;
+          }
+        });
+
+        updatedPlan[weekKey] = mergedWeek;
       });
 
       setDepartmentPlan(updatedPlan);
@@ -166,14 +211,18 @@ export function DepartmentCalendar({ user }) {
   };
 
   const handleExportPDF = async () => {
-    if (!tableRef.current) return;
+    const target = printRef.current || tableRef.current;
+    if (!target) return;
 
     try {
       setSaving(true);
-      const canvas = await html2canvas(tableRef.current, {
-        scale: 2,
+      // Use a higher scale so the PDF image is much crisper and closer to the on-screen rendering
+      const scale = Math.min(4, (window.devicePixelRatio || 1) * 2);
+      const canvas = await html2canvas(target, {
+        scale,
         useCORS: true,
         backgroundColor: '#ffffff',
+        logging: false,
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -229,7 +278,7 @@ export function DepartmentCalendar({ user }) {
 
   return (
     <div className="space-y-3 h-full flex flex-col">
-      <BrainCard className="p-4 flex-1 flex flex-col overflow-hidden">
+      <BrainCard className="relative p-4 flex-1 flex flex-col overflow-hidden">
         {/* Header and Controls */}
         <div className="mb-3">
           <div className="flex items-center justify-between gap-3 mb-2">
@@ -328,15 +377,85 @@ export function DepartmentCalendar({ user }) {
                           </span>
                         </div>
                       </td>
-                      {COLUMN_KEYS.map((colKey) => (
+                      {COLUMN_KEYS.map((colKey, colIdx) => (
                         <td key={colKey} className="px-2 py-1.5 align-top">
                           <textarea
                             value={weekData[colKey] || ''}
-                            onChange={(e) => handleCellChange(week.index, colKey, e.target.value)}
+                            onChange={(e) => {
+                              autoGrow(e.target);
+                              handleCellChange(week.index, colKey, e.target.value);
+                            }}
+                            ref={(el) => {
+                              if (el) autoGrow(el);
+                            }}
                             placeholder="+"
                             rows={2}
-                            className="w-full p-1.5 border border-slate-200 rounded text-xs leading-tight focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400 outline-none resize-none bg-white hover:bg-blue-50"
+                            className={`w-full p-1.5 border border-slate-200 rounded text-xs leading-tight focus:ring-1 focus:ring-indigo-400 focus:border-indigo-400 outline-none resize-none hover:bg-blue-50 overflow-hidden whitespace-pre-wrap ${
+                              colIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'
+                            }`}
                           />
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Hidden print-only table for PDF export */}
+        <div
+          className="absolute -left-[9999px] top-0 w-[1000px]"
+          aria-hidden="true"
+          ref={printRef}
+        >
+          <table className="w-full text-xs bg-white border-collapse border border-slate-200">
+            <thead>
+              <tr className="bg-gradient-to-r from-indigo-100 to-slate-100 border-b border-slate-300">
+                <th className="px-3 py-2 text-left font-bold text-slate-900 min-w-[90px]">
+                  Week
+                </th>
+                {COLUMN_LABELS.map((label) => (
+                  <th
+                    key={label}
+                    className="px-2 py-2 text-left font-bold text-slate-700 whitespace-nowrap min-w-[130px]"
+                  >
+                    {label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-200">
+              {weeks.length === 0 ? (
+                <tr>
+                  <td colSpan={COLUMN_LABELS.length + 1} className="px-4 py-8 text-center text-slate-400">
+                    No weeks available for this term.
+                  </td>
+                </tr>
+              ) : (
+                weeks.map((week) => {
+                  const weekKey = `week_${week.index}`;
+                  const weekData = departmentPlan[weekKey] || {};
+                  return (
+                    <tr key={weekKey}>
+                      <td className="px-3 py-2 font-semibold text-slate-900 border-r border-slate-200 align-top">
+                        <div className="flex flex-col">
+                          <span className="text-xs">W{week.index}</span>
+                          <span className="text-[10px] text-slate-500 leading-tight">
+                            {format(week.start, 'MMM d')}
+                          </span>
+                        </div>
+                      </td>
+                      {COLUMN_KEYS.map((colKey, colIdx) => (
+                        <td key={colKey} className="px-2 py-1.5 align-top">
+                          <div
+                            className={`w-full min-h-[32px] p-1.5 border border-slate-200 rounded text-[10px] leading-tight whitespace-pre-wrap ${
+                              colIdx % 2 === 0 ? 'bg-white' : 'bg-slate-50'
+                            }`}
+                          >
+                            {weekData[colKey] || ''}
+                          </div>
                         </td>
                       ))}
                     </tr>
