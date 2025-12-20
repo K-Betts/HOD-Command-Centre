@@ -1,9 +1,8 @@
 import React from 'react';
-import clsx from 'clsx';
 
 export function AppShell({ sidebar, header, children, className }) {
   return (
-    <div className="h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 relative flex">
+    <div className={['h-screen w-screen overflow-hidden bg-slate-50 text-slate-900 relative flex', className].filter(Boolean).join(' ')}>
       {/* Sidebar - Fixed */}
       <div className="w-64 h-full flex-shrink-0 border-r border-slate-200 bg-white overflow-y-auto">
         {sidebar}

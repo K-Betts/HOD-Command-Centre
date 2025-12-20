@@ -1,8 +1,12 @@
 import { applyContextTags } from '../utils/taskContext';
+import { logGlobalCall, triggerGlobalCooldown } from '../hooks/useAIQuota';
+import { logEvent } from './telemetry';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from './firebase';
+import { appId } from '../config/appConfig';
+import { getClientSessionId } from '../utils/session';
 
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const modelPath =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent';
+const generateAIResponse = httpsCallable(functions, 'generateAIResponse');
 
 let aiErrorNotifier = null;
 
@@ -19,36 +23,60 @@ function notifyAiError(message) {
   }
 }
 
-const fetchWithRetry = async (url, options, retries = 3, backoff = 1000) => {
+const callWithRetry = async (payload, retries = 3, backoff = 1000) => {
+  // Log the API call
+  logGlobalCall();
+
   try {
-    const res = await fetch(url, options);
-    if (res.status === 429) throw new Error('RATE_LIMIT');
-    if (!res.ok) throw new Error('API_ERROR');
-    return res.json();
+    const result = await generateAIResponse(payload);
+
+    // Log successful AI call to telemetry
+    logEvent('AI', 'Call', 'generateContent', {
+      status: 'success',
+      quota: result?.data?.quota || null,
+      timestamp: new Date().toISOString(),
+    });
+
+    return result?.data;
   } catch (err) {
-    if (retries > 0 && err.message === 'RATE_LIMIT') {
-      await new Promise(r => setTimeout(r, backoff));
-      return fetchWithRetry(url, options, retries - 1, backoff * 2);
+    // Callable errors often come through as FirebaseError with .code
+    const code = err?.code || err?.message;
+    if (code === 'resource-exhausted' || code === 'RATE_LIMIT') {
+      triggerGlobalCooldown();
     }
+
+    if (retries > 0 && (code === 'resource-exhausted' || code === 'RATE_LIMIT')) {
+      await new Promise(r => setTimeout(r, backoff));
+      return callWithRetry(payload, retries - 1, backoff * 2);
+    }
+    
+    // Log failed AI call
+    logEvent('AI', 'Call', 'generateContent', {
+      status: 'error',
+      error: err?.message || String(err),
+      timestamp: new Date().toISOString(),
+    });
+    
     throw err;
   }
 };
 
 async function fetchJson(body, config) {
-  const url = `${modelPath}?key=${apiKey}`;
-  const options = {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ contents: [{ parts: [{ text: body }] }], ...config }),
+  const payload = {
+    appId,
+    clientSessionId: getClientSessionId() || null,
+    promptText: body,
+    generationConfig: config?.generationConfig,
+    responseMimeType: config?.generationConfig?.responseMimeType,
   };
 
   try {
-    const data = await fetchWithRetry(url, options);
-    return data;
+    const data = await callWithRetry(payload);
+    return data || {};
   } catch (err) {
     console.error('AI request failed', err);
     let message = 'AI Service Unavailable - check connection.';
-    if (err.message === 'RATE_LIMIT') {
+    if (err?.code === 'resource-exhausted' || err?.message === 'RATE_LIMIT') {
       message = 'AI service is busy, please try again in a moment.';
     }
     notifyAiError(message);
@@ -63,26 +91,6 @@ function extractTextCandidate(data) {
       ? data.candidates[0].content.parts[0]
       : null);
   return typeof part?.text === 'string' ? part.text : '';
-}
-
-export async function analyzeContext(text, type) {
-  const prompt =
-    type === 'calendar'
-      ? `Extract key school dates from this text. Return JSON: { "events": [{ "date": "YYYY-MM-DD", "event": "Event Name", "type": "Term/Exam/Report" }] }. Text: "${text}"`
-      : `Extract strategic goals from this text. Return JSON: { "goals": [{ "title": "Goal Title", "focus": "Brief description" }] }. Text: "${text}"`;
-
-  try {
-    const data = await fetchJson(prompt, {
-      generationConfig: { responseMimeType: 'application/json' },
-    });
-    const text = extractTextCandidate(data);
-    if (!text) throw new Error('Empty AI response');
-    return JSON.parse(text);
-  } catch (error) {
-    console.error('analyzeContext failed', error);
-    notifyAiError('AI Service Unavailable - check connection.');
-    return null;
-  }
 }
 
 export async function analyzeBrainDump(text, staffList = [], context = {}) {
@@ -138,7 +146,8 @@ OUTPUT JSON SHAPE:
       "energyLevel": "High Focus" | "Low Energy/Admin",
       "isWeeklyWin": true | false,
       "dueDate": "YYYY-MM-DD" | null,
-      "assignee": "Name or empty string",
+      "assignedTo": "Staff ID from staff list if delegated, empty string otherwise",
+      "isDelegated": true | false,
       "summary": "One or two sentences",
       "themeTag": "optional strategy tag if applicable"
     }
@@ -151,9 +160,10 @@ OUTPUT JSON SHAPE:
   "staffInsights": [
     {
       "staffName": "Name or empty",
+      "staffId": "Staff ID from staff list if identifiable",
       "date": "YYYY-MM-DD" | null,
-      "type": "Challenge" | "Support" | "praise" | "concern" | "neutral",
-      "interactionType": "Challenge" | "Support",
+      "type": "Challenge" | "Support" | "Admin" | "Observation",
+      "interactionType": "Challenge" | "Support" | "Admin" | "Observation",
       "summary": "Single-sentence note",
       "source": "BrainDump"
     }
@@ -177,10 +187,20 @@ OUTPUT JSON SHAPE:
 }
 
 RULES:
+- Delegation Detection (CRITICAL):
+  * If input says "Ask [Name] to do X", "Tell [Name] to X", "[Name] will handle X", or similar delegation patterns:
+    → Find the Staff ID from the staff list using staffName match
+    → Set "assignedTo": "[Staff ID]"
+    → Set "isDelegated": true
+  * If task is for the user themselves (no delegation pattern):
+    → Set "assignedTo": ""
+    → Set "isDelegated": false
 - Interaction classification (STRICT):
-  * CHALLENGE (Red): Deadlines, timescales, standards, corrections/errors, intense meetings, holding to account, performance reviews, observations, asking for change/output/improvement. Ambiguity defaults to CHALLENGE.
-  * SUPPORT (Green): Praise, wellbeing checks, listening, empathy, coffee chats, gratitude, pure care with no output requested.
-  * ADMIN (Gray): Scheduling, logistics, room bookings, neutral updates.
+  * CHALLENGE (Red): Deadlines, timescales, standards, corrections/errors, intense meetings, holding to account, performance reviews, asking for change/output/improvement, critical feedback. Keywords: deadline, late, must, redo, missed, overdue, concern, issue, problem.
+  * SUPPORT (Green): Praise, wellbeing checks, listening, empathy, coffee chats, gratitude, pure care with no output requested. Keywords: great, well done, thanks, appreciation, support, wellbeing.
+  * ADMIN (Gray): Scheduling, logistics, room bookings, neutral updates, information sharing. Keywords: scheduled, booked, sent, forwarded, updated.
+  * OBSERVATION (Blue): General notes, context, mood, team dynamics, non-judgmental updates, neutral observations about staff or situations. Keywords: noticed, observed, seems, appears, mood, atmosphere, general note.
+  * Default to OBSERVATION for neutral/ambiguous statements. Only use CHALLENGE if negative keywords are explicitly present.
   Few-shot examples:
     - "Told Sarah she missed the deadline." -> CHALLENGE
     - "Set a deadline for the report." -> CHALLENGE
@@ -188,6 +208,9 @@ RULES:
     - "Asked Bob to redo the marking." -> CHALLENGE
     - "Had a coffee with Jane to check on her mood." -> SUPPORT
     - "Sent the weekly timetable." -> ADMIN
+    - "John seems tired lately." -> OBSERVATION
+    - "Team morale is good." -> OBSERVATION
+    - "Sarah mentioned she's working on the new curriculum." -> OBSERVATION
 - Split EVERY distinct action into its own task.
 - Always return estimatedTime using only the allowed options and set energyLevel to "High Focus" or "Low Energy/Admin" (admin/email = Low, deep work/analysis/strategy = High Focus). Set isWeeklyWin = true only for strategic/high-impact work.
 - Smart due date rules (use current date as reference):
@@ -581,7 +604,7 @@ Rules:
   }
 }
 
-export async function validateStrategicWhy(title, whyText) {
+async function validateStrategicWhy(title, whyText) {
   if (!whyText) return null;
   const prompt = `You are a critical leadership coach applying Simon Sinek's "Start With Why".
 
@@ -723,21 +746,6 @@ Keep meaning intact, make it concise, respectful, and practical. Use UK English.
   }
 }
 
-export async function suggestSubtasks(task) {
-  try {
-    const data = await fetchJson(
-      `Break down task "${task.title}" into 3-5 checklist items.`
-    );
-    const text = extractTextCandidate(data);
-    if (!text) throw new Error('Empty AI response');
-    return text;
-  } catch (e) {
-    console.error('suggestSubtasks failed', e);
-    notifyAiError('AI Service Unavailable - check connection.');
-    return 'Error generating steps.';
-  }
-}
-
 export async function auditBudget(expenses, totalBudget, currency) {
   try {
     const baseCurrency = 'AED';
@@ -783,21 +791,6 @@ Provide a short, practical summary in UK English: comment on pace of spend, cate
     console.error('auditBudget AI summary failed', e);
     notifyAiError('AI Service Unavailable - check connection.');
     return 'Error auditing budget.';
-  }
-}
-
-export async function analyzeStrategicPlan(planText) {
-  try {
-    const data = await fetchJson(
-      `You are a strategic planner. Analyze DIP: "${planText}". Return JSON: { "milestones": [{ "week": 1, "action": "...", "owner": "..." }], "themes": [] }`,
-      { generationConfig: { responseMimeType: 'application/json' } }
-    );
-    const text = extractTextCandidate(data);
-    if (!text) throw new Error('No AI response');
-    return JSON.parse(text);
-  } catch (error) {
-    console.error('analyzeStrategicPlan failed', error);
-    return { milestones: [], themes: [] };
   }
 }
 

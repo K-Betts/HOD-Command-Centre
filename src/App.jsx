@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, lazy, Suspense } from 'react';
 import {
   LayoutDashboard,
   Users,
@@ -11,31 +11,61 @@ import {
   SlidersHorizontal,
   FileText,
   NotebookPen,
+  Shield,
 } from 'lucide-react';
-import { TaskBoard } from './features/tasks/TaskBoard';
 import { DashboardView } from './features/dashboard/DashboardView';
-import { StaffView } from './features/staff/StaffView';
-import { ScheduleView } from './features/schedule/ScheduleView';
-import { StrategyView } from './features/strategy/StrategyView';
-import { CommunicationShield } from './features/comms/CommunicationShield';
-import { DevilsAdvocate } from './features/advocate/DevilsAdvocate';
-import { WeeklyEmailGenerator } from './features/email/WeeklyEmailGenerator';
-import { EndDayModal } from './features/wellbeing/EndDayModal';
+import { TaskBoard } from './features/tasks/TaskBoard';
 import { LiveClock } from './components/ui/LiveClock';
-import { TaskDetailModal } from './features/tasks/TaskDetailModal';
 import { useTasks } from './hooks/useTasks';
 import { useStaff } from './hooks/useStaff';
 import { useContextData } from './hooks/useContextData';
+import { useTelemetry } from './hooks/useTelemetry';
 import { ToastProvider } from './context/ToastContext';
 import { useToast } from './context/ToastContext';
 import { AcademicYearProvider } from './context/AcademicYearContext';
+import { AppErrorBoundary } from './components/shared/ErrorBoundary';
 import { setAiErrorNotifier } from './services/ai';
-import { SchoolYearSettings } from './features/settings/SchoolYearSettings';
 import { Sidebar } from './layout/Sidebar';
 import { AppLayout } from './layout/AppLayout';
 import { AuthGate } from './layout/AuthGate';
-import { DepartmentReport } from './features/reports/DepartmentReport';
-import { MeetingsView } from './features/meetings/MeetingsView';
+
+const StaffView = lazy(() => import('./features/staff/StaffView').then((m) => ({ default: m.StaffView })));
+const ScheduleView = lazy(() =>
+  import('./features/schedule/ScheduleView').then((m) => ({ default: m.ScheduleView }))
+);
+const StrategyView = lazy(() =>
+  import('./features/strategy/StrategyView').then((m) => ({ default: m.StrategyView }))
+);
+const CommunicationShield = lazy(() =>
+  import('./features/comms/CommunicationShield').then((m) => ({ default: m.CommunicationShield }))
+);
+const DevilsAdvocate = lazy(() =>
+  import('./features/advocate/DevilsAdvocate').then((m) => ({ default: m.DevilsAdvocate }))
+);
+const WeeklyEmailGenerator = lazy(() =>
+  import('./features/email/WeeklyEmailGenerator').then((m) => ({ default: m.WeeklyEmailGenerator }))
+);
+const EndDayModal = lazy(() =>
+  import('./features/wellbeing/EndDayModal').then((m) => ({ default: m.EndDayModal }))
+);
+const TaskDetailModal = lazy(() =>
+  import('./features/tasks/TaskDetailModal').then((m) => ({ default: m.TaskDetailModal }))
+);
+const SchoolYearSettings = lazy(() =>
+  import('./features/settings/SchoolYearSettings').then((m) => ({ default: m.SchoolYearSettings }))
+);
+const ModulePreferences = lazy(() =>
+  import('./features/settings/ModulePreferences').then((m) => ({ default: m.ModulePreferences }))
+);
+const DepartmentReport = lazy(() =>
+  import('./features/reports/DepartmentReport').then((m) => ({ default: m.DepartmentReport }))
+);
+const MeetingsView = lazy(() =>
+  import('./features/meetings/MeetingsView').then((m) => ({ default: m.MeetingsView }))
+);
+const AdminDashboard = lazy(() =>
+  import('./features/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard }))
+);
 
 // --- Main App Component ---
 export default function App() {
@@ -45,7 +75,9 @@ export default function App() {
         <ToastProvider>
           <AiToastBridge />
           <AcademicYearProvider user={user}>
-            <AuthedAppShell user={user} />
+            <AppErrorBoundary>
+              <AuthedAppShell user={user} />
+            </AppErrorBoundary>
           </AcademicYearProvider>
         </ToastProvider>
       )}
@@ -58,6 +90,18 @@ function AuthedAppShell({ user }) {
   const [editingTask, setEditingTask] = useState(null);
   const [showDebrief, setShowDebrief] = useState(false);
   const { updateTask, deleteTask, addTask, tasks } = useTasks(user);
+  const { logNavigation, logEvent } = useTelemetry();
+  const activeTabRef = useRef(activeTab);
+  const sessionIdRef = useRef(null);
+  const sessionStartRef = useRef(null);
+  const lastActivityRef = useRef(0);
+  const idleTimeoutRef = useRef(null);
+  const sessionStorageKey = 'hod_session_id';
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+  
   const waitingCount = useMemo(
     () =>
       (tasks || []).filter(
@@ -72,18 +116,93 @@ function AuthedAppShell({ user }) {
   const { staff, logInteraction } = useStaff(user);
   const { context, updateContext } = useContextData(user);
 
+  // Session Tracking: Initialize session on mount
+  useEffect(() => {
+    const sessionId = `session_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+    sessionIdRef.current = sessionId;
+    sessionStartRef.current = Date.now();
+    lastActivityRef.current = Date.now();
+
+    try {
+      window.sessionStorage?.setItem?.(sessionStorageKey, sessionId);
+    } catch {
+      // ignore
+    }
+
+    // Log session start
+    logEvent('Session', 'Start', sessionId, {
+      sessionId,
+      referrer: document.referrer,
+      initialTab: activeTabRef.current,
+    });
+
+    // Activity tracking for idle detection
+    const updateActivity = () => {
+      lastActivityRef.current = Date.now();
+      
+      // Reset idle timeout
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+
+      // Set idle timeout (15 minutes)
+      idleTimeoutRef.current = setTimeout(() => {
+        const idleDuration = Math.floor((Date.now() - lastActivityRef.current) / 1000);
+        logEvent('Session', 'Idle', sessionId, {
+          sessionId,
+          idleDuration,
+        });
+      }, 15 * 60 * 1000); // 15 minutes
+    };
+
+    // Track user activity
+    const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+    events.forEach(event => {
+      window.addEventListener(event, updateActivity, { passive: true });
+    });
+
+    updateActivity(); // Initialize
+
+    // Cleanup function - log session end
+    return () => {
+      events.forEach(event => {
+        window.removeEventListener(event, updateActivity);
+      });
+
+      if (idleTimeoutRef.current) {
+        clearTimeout(idleTimeoutRef.current);
+      }
+
+      const sessionDuration = Math.floor((Date.now() - sessionStartRef.current) / 1000);
+      const lastActivity = Math.floor((Date.now() - lastActivityRef.current) / 1000);
+      
+      logEvent('Session', 'End', sessionIdRef.current, {
+        sessionId: sessionIdRef.current,
+        duration: sessionDuration,
+        lastActivityAgo: lastActivity,
+        finalTab: activeTabRef.current,
+      });
+    };
+  }, [logEvent, sessionStorageKey]); // Only run once on mount
+
+  // Navigation Tracking: Log page views when activeTab changes
+  useEffect(() => {
+    logNavigation(activeTab);
+  }, [activeTab, logNavigation]);
+
   const headerMeta = {
     dashboard: { icon: LayoutDashboard, label: 'Command Dashboard' },
     tasks: { icon: CheckSquare, label: 'Task Cockpit' },
     staff: { icon: Users, label: 'Staff Room' },
     strategy: { icon: Map, label: 'Strategy War Room' },
     comms: { icon: MessageSquare, label: 'Comms' },
-  advocate: { icon: Sparkles, label: 'Idea Refiner' },
-  reports: { icon: FileText, label: 'Board Report' },
-  weeklyEmail: { icon: Mail, label: 'Weekly Email' },
-  settings: { icon: SlidersHorizontal, label: 'System Settings' },
-  meetings: { icon: NotebookPen, label: 'Meetings' },
-};
+    advocate: { icon: Sparkles, label: 'Idea Refiner' },
+    reports: { icon: FileText, label: 'Board Report' },
+    weeklyEmail: { icon: Mail, label: 'Weekly Email' },
+    settings: { icon: SlidersHorizontal, label: 'System Settings' },
+    meetings: { icon: NotebookPen, label: 'Meetings' },
+    admin: { icon: Shield, label: 'Admin Console' },
+  };
 
   const activeHeader = headerMeta[activeTab] || headerMeta.dashboard;
   const HeaderIcon = activeHeader.icon;
@@ -122,51 +241,60 @@ function AuthedAppShell({ user }) {
       updateContext={updateContext}
     >
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8 pb-24">
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
-          {activeTab === 'dashboard' && (
-            <DashboardView user={user} setActiveTab={setActiveTab} />
-          )}
-          {activeTab === 'tasks' && (
-            <TaskBoard user={user} onEditTask={setEditingTask} />
-          )}
-          {activeTab === 'meetings' && (
-            <MeetingsView
-              user={user}
-              staff={staff}
-              logInteraction={logInteraction}
-              addTask={addTask}
-              tasks={tasks}
-            />
-          )}
-          {activeTab === 'strategy' && <StrategyView user={user} staff={staff} />}
-          {activeTab === 'staff' && <StaffView user={user} setActiveTab={setActiveTab} />}
-          {activeTab === 'comms' && <CommunicationShield staff={staff} />}
-          {activeTab === 'advocate' && <DevilsAdvocate user={user} />}
-          {activeTab === 'reports' && <DepartmentReport user={user} />}
-          {activeTab === 'weeklyEmail' && <WeeklyEmailGenerator user={user} />}
-          {activeTab === 'settings' && <SettingsHub user={user} />}
-        </div>
+        <Suspense
+          fallback={
+            <div className="p-6 text-sm text-slate-500">Loading...</div>
+          }
+        >
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8">
+            {activeTab === 'dashboard' && (
+              <DashboardView user={user} setActiveTab={setActiveTab} />
+            )}
+            {activeTab === 'tasks' && (
+              <TaskBoard user={user} onEditTask={setEditingTask} />
+            )}
+            {activeTab === 'meetings' && (
+              <MeetingsView
+                user={user}
+                staff={staff}
+                logInteraction={logInteraction}
+                addTask={addTask}
+                tasks={tasks}
+              />
+            )}
+            {activeTab === 'strategy' && <StrategyView user={user} staff={staff} />}
+            {activeTab === 'staff' && <StaffView user={user} setActiveTab={setActiveTab} />}
+            {activeTab === 'comms' && <CommunicationShield staff={staff} />}
+            {activeTab === 'advocate' && <DevilsAdvocate user={user} />}
+            {activeTab === 'reports' && <DepartmentReport user={user} />}
+            {activeTab === 'weeklyEmail' && <WeeklyEmailGenerator user={user} />}
+            {activeTab === 'settings' && <SettingsHub user={user} />}
+            {activeTab === 'admin' && <AdminDashboard />}
+          </div>
+        </Suspense>
       </div>
 
-      {showDebrief && (
-        <EndDayModal
-          user={user}
-          staff={staff}
-          context={context}
-          updateContext={updateContext}
-          onClose={() => setShowDebrief(false)}
-        />
-      )}
+      <Suspense fallback={null}>
+        {showDebrief && (
+          <EndDayModal
+            user={user}
+            staff={staff}
+            context={context}
+            updateContext={updateContext}
+            onClose={() => setShowDebrief(false)}
+          />
+        )}
 
-      {editingTask && (
-        <TaskDetailModal
-          task={editingTask}
-          user={user}
-          onSave={updateTask}
-          onDelete={deleteTask}
-          onClose={() => setEditingTask(null)}
-        />
-      )}
+        {editingTask && (
+          <TaskDetailModal
+            task={editingTask}
+            user={user}
+            onSave={updateTask}
+            onDelete={deleteTask}
+            onClose={() => setEditingTask(null)}
+          />
+        )}
+      </Suspense>
     </AppLayout>
   );
 
@@ -177,6 +305,7 @@ function SettingsHub({ user }) {
   const sections = [
     { id: 'system', label: 'System Rhythm' },
     { id: 'timetable', label: 'Schedule / Timetable' },
+    { id: 'modules', label: 'Module Preferences' },
   ];
 
   return (
@@ -210,6 +339,8 @@ function SettingsHub({ user }) {
 
       {activeSection === 'system' ? (
         <SchoolYearSettings user={user} />
+      ) : activeSection === 'modules' ? (
+        <ModulePreferences user={user} />
       ) : (
         <div className="bg-white/80 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-sm p-6">
           <ScheduleView user={user} />

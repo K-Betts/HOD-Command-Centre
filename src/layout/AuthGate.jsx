@@ -1,10 +1,56 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import { auth, signIn, signOut } from '../services/firebase';
+import { auth, signIn, signOut, db } from '../services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../services/firebase';
 
 export function AuthGate({ children }) {
   const [user, loading, error] = useAuthState(auth);
   const [authError, setAuthError] = useState(null);
+  const [roleLoading, setRoleLoading] = useState(true);
+  const [role, setRole] = useState(null);
+
+  const ensureUserRole = useMemo(
+    () => httpsCallable(functions, 'ensureUserRole'),
+    []
+  );
+
+  // Ensure RBAC role exists and then read it.
+  useEffect(() => {
+    let mounted = true;
+    async function loadRole() {
+      try {
+        if (!user?.uid) {
+          if (mounted) {
+            setRole(null);
+            setRoleLoading(false);
+          }
+          return;
+        }
+
+        // This callable will provision a role for legacy-whitelisted users (or superadmin email).
+        // It is safe to call repeatedly.
+        await ensureUserRole();
+
+        const roleSnap = await getDoc(doc(db, 'roles', user.uid));
+        const roleValue = roleSnap.exists() ? roleSnap.data()?.role : null;
+
+        if (mounted) setRole(typeof roleValue === 'string' ? roleValue : null);
+      } catch (err) {
+        if (import.meta.env.DEV) {
+          console.warn('[AuthGate] Role provisioning/check failed:', err?.message || err);
+        }
+        if (mounted) setRole(null);
+      } finally {
+        if (mounted) {
+          setRoleLoading(false);
+        }
+      }
+    }
+    loadRole();
+    return () => { mounted = false; };
+  }, [user?.uid, ensureUserRole]);
 
   const handleSignIn = async () => {
     setAuthError(null);
@@ -26,7 +72,7 @@ export function AuthGate({ children }) {
     }
   };
 
-  if (loading)
+  if (loading || roleLoading)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-700">
         <div className="text-center space-y-3">
@@ -79,15 +125,17 @@ export function AuthGate({ children }) {
       </div>
     );
 
-  if (user.email !== 'kieran.betts@outlook.com')
+  // Check if user is authorized (RBAC roles).
+  const isAuthorized = role === 'user' || role === 'admin' || role === 'superadmin';
+
+  if (!isAuthorized)
     return (
       <div className="min-h-screen flex items-center justify-center bg-slate-900 text-white">
         <div className="bg-white/10 backdrop-blur-lg border border-white/20 rounded-3xl p-8 max-w-md w-full text-center space-y-4">
           <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-300">Restricted</p>
           <h1 className="text-3xl font-bold">ACCESS DENIED</h1>
           <p className="text-sm text-slate-200">
-            Signed in as <span className="font-semibold">{user.email || 'Unknown'}</span>. This app is locked to the
-            owner.
+            Signed in as <span className="font-semibold">{user?.email || 'Unknown'}</span>. This app requires explicit authorization.
           </p>
           <button
             onClick={handleSignOut}
@@ -107,3 +155,4 @@ export function AuthGate({ children }) {
   const content = typeof children === 'function' ? children(user) : children;
   return content;
 }
+

@@ -110,7 +110,7 @@ Friday,10:00,11:00,History,GCSE History,Room C5`;
                 }
                 await addEvent(evt);
                 imported += 1;
-              } catch (err) {
+              } catch {
                 // ignore per-event errors
               }
             }

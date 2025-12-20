@@ -3,26 +3,32 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:rules": "firebase emulators:exec --only firestore \"node --test tests/firestore.rules.test.js\"",
+    "verify": "npm run lint && npm run build && npm run test:rules",
     "preview": "vite preview"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "firebase": "^12.6.0",
     "html2canvas": "^1.4.1",
-    "ical.js": "^2.2.1",
     "jspdf": "^3.0.4",
     "lucide-react": "^0.555.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-firebase-hooks": "^5.1.1",
-    "recharts": "^2.12.7"
+    "recharts": "^2.15.4"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@firebase/rules-unit-testing": "^5.0.0",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.1.1",
@@ -30,6 +36,7 @@
     "eslint": "^9.39.1",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
+    "firebase-tools": "^13.35.1",
     "globals": "^16.5.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",

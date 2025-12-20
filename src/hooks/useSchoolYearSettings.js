@@ -49,7 +49,7 @@ export function useSchoolYearSettings(user) {
 
   /* eslint-disable react-hooks/set-state-in-effect -- Firestore subscription drives settings state */
   useEffect(() => {
-    if (!user) {
+    if (!user?.uid) {
       setSettings(buildDefaults());
       setLoading(false);
       return undefined;
@@ -66,32 +66,52 @@ export function useSchoolYearSettings(user) {
     );
 
     setLoading(true);
-    const unsubscribe = onSnapshot(
-      ref,
-      (snap) => {
-        setError(null);
-        if (snap.exists()) {
-          setSettings(normalizeSettings(snap.data()));
-        } else {
-          const defaults = buildDefaults();
-          setSettings(defaults);
-          setDoc(ref, serializeSettings(defaults));
-        }
-        setLoading(false);
-      },
-      (err) => {
+
+    let unsubscribe;
+    let cancelled = false;
+
+    const seedAndSubscribe = async () => {
+      try {
+        await setDoc(ref, { uid: user.uid }, { merge: true });
+        if (cancelled) return;
+
+        unsubscribe = onSnapshot(
+          ref,
+          (snap) => {
+            setError(null);
+            if (snap.exists()) {
+              setSettings(normalizeSettings(snap.data()));
+            } else {
+              const defaults = buildDefaults();
+              setSettings(defaults);
+              setDoc(ref, { uid: user.uid, ...serializeSettings(defaults) });
+            }
+            setLoading(false);
+          },
+          (err) => {
+            console.error('School year settings load failed', err);
+            setError(err.message || 'Unable to load school year settings');
+            setLoading(false);
+          }
+        );
+      } catch (err) {
         console.error('School year settings load failed', err);
         setError(err.message || 'Unable to load school year settings');
         setLoading(false);
       }
-    );
+    };
 
-    return () => unsubscribe();
+    seedAndSubscribe();
+
+    return () => {
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
+    };
   }, [user]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const saveSettings = async (next) => {
-    if (!user) throw new Error('No user session.');
+    if (!user?.uid) throw new Error('No user session.');
     const ref = doc(
       db,
       'artifacts',
@@ -102,7 +122,7 @@ export function useSchoolYearSettings(user) {
       'schoolYear'
     );
     const payload = serializeSettings(next);
-    await setDoc(ref, payload, { merge: true });
+    await setDoc(ref, { ...payload, uid: user.uid }, { merge: true });
   };
 
   return { settings, saveSettings, loading, error };

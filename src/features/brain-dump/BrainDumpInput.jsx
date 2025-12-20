@@ -15,8 +15,8 @@ export function BrainDumpInput({ user, staff, context, updateContext, compact = 
   const [rawAiText, setRawAiText] = useState('');
   const [error, setError] = useState('');
   const { logInteraction } = useStaff(user);
-  const { tasks } = useTasks(user?.uid);
-  const { scheduleEvents } = useScheduleEvents(user?.uid);
+  const { tasks } = useTasks(user);
+  const { scheduleEvents } = useScheduleEvents(user);
 
   const handleDump = async (e) => {
     e.preventDefault();
@@ -121,7 +121,7 @@ export function BrainDumpInput({ user, staff, context, updateContext, compact = 
           onChange={(e) => setInput(e.target.value)}
           disabled={isProcessing}
           placeholder="Paste emails, meeting minutes, or messy notes here..."
-          className="w-full rounded-xl border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 min-h-[80px] pr-12 p-4 text-gray-700 placeholder:text-gray-400 bg-white disabled:opacity-50"
+          className="w-full rounded-xl border-gray-200 focus:border-indigo-500 focus:ring-indigo-500 min-h-[240px] pr-12 p-4 text-gray-700 placeholder:text-gray-400 bg-white disabled:opacity-50"
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -160,11 +160,19 @@ export function BrainDumpInput({ user, staff, context, updateContext, compact = 
 }
 
 function applyChallengeOverrides(aiResult) {
-  const keywords = ['deadline', 'late', 'due', 'missed', 'ensure', 'must', 'review'];
+  const challengeKeywords = ['deadline', 'late', 'due', 'missed', 'overdue', 'must', 'redo', 'concern', 'issue', 'problem'];
+  
   const forceChallenge = (insight = {}) => {
+    // Only override if it's not already properly classified
+    if (insight.type === 'Challenge' || insight.type === 'Support' || insight.type === 'Admin') {
+      return insight;
+    }
+    
     const text = `${insight.summary || ''} ${insight.notes || ''} ${insight.text || ''}`.toLowerCase();
-    const shouldForce = keywords.some((kw) => text.includes(kw));
-    if (!shouldForce) return insight;
+    const shouldForceChallenge = challengeKeywords.some((kw) => text.includes(kw));
+    
+    if (!shouldForceChallenge) return insight;
+    
     return {
       ...insight,
       type: 'Challenge',

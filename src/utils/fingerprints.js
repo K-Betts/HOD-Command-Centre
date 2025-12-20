@@ -35,6 +35,7 @@ export async function fetchRecentStaffInsightFingerprints(user) {
   since.setDate(since.getDate() - 30);
   const q = query(
     collection(db, 'artifacts', appId, 'users', user.uid, 'staffInsights'),
+    where('uid', '==', user.uid),
     where('createdAt', '>=', since)
   );
   const snap = await getDocs(q);
@@ -53,6 +54,7 @@ export async function fetchRecentStrategyNoteFingerprints(user) {
   since.setDate(since.getDate() - 30);
   const q = query(
     collection(db, 'artifacts', appId, 'users', user.uid, 'strategyNotes'),
+    where('uid', '==', user.uid),
     where('createdAt', '>=', since)
   );
   const snap = await getDocs(q);

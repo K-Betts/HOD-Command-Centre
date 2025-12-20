@@ -1,6 +1,10 @@
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const modelPath =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent';
+import { httpsCallable } from 'firebase/functions';
+
+import { functions } from '../firebase';
+import { appId } from '../../config/appConfig';
+import { getClientSessionId } from '../../utils/session';
+
+const geminiGenerateContent = httpsCallable(functions, 'geminiGenerateContent');
 
 const basePrompt =
   'Extract: Date, Attendees, Agenda Items, and Action Points. For Action Points, identify the Owner and Deadline.';
@@ -14,19 +18,13 @@ const emptyResult = {
 };
 
 const fetchJson = async (prompt) => {
-  const body = {
-    contents: [{ parts: [{ text: prompt }] }],
+  const result = await geminiGenerateContent({
+    appId,
+    clientSessionId: getClientSessionId() || null,
+    promptText: prompt,
     generationConfig: { responseMimeType: 'application/json', temperature: 0.1 },
-  };
-  const res = await fetch(`${modelPath}?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
   });
-  if (!res.ok) {
-    throw new Error(`AI request failed with status ${res.status}`);
-  }
-  return res.json();
+  return result?.data || {};
 };
 
 const extractTextCandidate = (data) => {

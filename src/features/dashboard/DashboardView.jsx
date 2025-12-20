@@ -8,7 +8,6 @@ import { getEffectivePriority } from '../tasks/TaskBoard';
 import { formatFriendlyDate } from '../../utils/formatters';
 import { useBuckBalance } from '../../hooks/useBuckBalance';
 import { applyContextTags } from '../../utils/taskContext';
-import { StrategicHeatmap } from '../strategy/StrategicHeatmap';
 import { useScheduleEvents } from '../../hooks/useScheduleEvents';
 import { WellbeingTrend } from '../wellbeing/WellbeingTrend';
 import { SmartContextWidget } from '../tasks/SmartContextWidget';
@@ -294,7 +293,6 @@ function LeadershipMode({
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-        <StrategicHeatmap user={user} />
         <WellbeingTrend user={user} logs={wellbeingLogs} />
       </div>
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">

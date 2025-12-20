@@ -268,6 +268,7 @@ export function IngestionReviewModal({
         await addDoc(
           collection(db, 'artifacts', appId, 'users', user.uid, 'wellbeingLogs'),
           {
+              uid: user.uid,
             mood: safeAi.wellbeing.mood || 'Okay',
             energy: safeAi.wellbeing.energy || 'Medium',
             summary:
@@ -291,6 +292,7 @@ export function IngestionReviewModal({
             collection(db, 'artifacts', appId, 'users', user.uid, 'staffInsights'),
             {
               ...insight,
+                uid: user.uid,
               fingerprint: fingerprintInsight(insight),
               createdAt: serverTimestamp(),
             }
@@ -320,6 +322,7 @@ export function IngestionReviewModal({
             collection(db, 'artifacts', appId, 'users', user.uid, 'strategyNotes'),
             {
               ...note,
+                uid: user.uid,
               fingerprint: fingerprintStrategyNote(note),
               createdAt: serverTimestamp(),
             }

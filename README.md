@@ -57,3 +57,55 @@ The application must respect the cyclical nature of schools.
 	•	Staff profiles and all interactions with staff remain live and accumulate over time.
 	•	Wellbeing trends for you (the HoD) persist across years so long-term patterns can be tracked, even though individual year artefacts are archived.
 	•	Context: Default views focus on the current Academic Year and its current cycle (Term / Half-Term), with access to archived years when needed.
+
+---
+
+## Ops / Security Notes
+
+- Firestore security rules live in [firestore.rules](firestore.rules). Deploy these via Firebase CLI (or your CI) so access control is enforced server-side.
+- Access control uses RBAC documents in the top-level `roles` collection (keyed by UID).
+    - A signed-in user is considered authorized if `roles/{uid}` exists with `role` in: `user | admin | superadmin`.
+    - Admin features require `role` in: `admin | superadmin`.
+    - Role management (create/update/delete) is restricted to `superadmin`.
+- `whitelistedUsers/{emailLower}` is retained only as a legacy invite/bootstrap list for migrating existing users. It is not the primary authorization mechanism.
+- Telemetry and crash/feedback are written to `artifacts/{appId}/telemetry` and `artifacts/{appId}/feedback` (admin-readable; client-writable for authorized roles).
+    - Events include `sessionId` for correlation, and an `expiresAt` timestamp field you can hook up to Firestore TTL for automatic retention cleanup.
+- Data classification / PII inventory: [docs/data-classification.md](docs/data-classification.md)
+
+Local validation:
+- `npm run test:rules` (runs Firestore rules tests against the emulator)
+- `npm run verify` (lint + build + rules tests)
+
+CI:
+- GitHub Actions runs the same quality gate (`npm run verify`) on PRs via `.github/workflows/verify.yml`.
+- Node version is pinned via `.nvmrc` (CI uses it via `actions/setup-node`).
+
+## AI Proxy (Server-Side)
+
+The app calls Gemini via a Firebase Cloud Function (`generateAIResponse`) so the Gemini API key is never shipped to the browser.
+
+- Client code calls the function via `httpsCallable` (no `VITE_GEMINI_API_KEY` required).
+- Server requires:
+    - `GEMINI_API_KEY` (Gemini API key, set as a Functions Secret)
+    - `SUPER_ADMIN_EMAIL` (super admin email used by functions auth)
+
+Optional hardening knobs (Functions env vars):
+- `AI_ALLOWED_MODELS` (comma-separated allowlist; defaults to the app's default model)
+- `AI_MAX_PROMPT_CHARS` (defaults to 60000)
+- `AI_MAX_OUTPUT_TOKENS` (defaults to 4096)
+- `AI_QUOTA_PER_DAY` and `AI_QUOTA_PER_MINUTE` (defaults vary by role)
+- `ARTIFACT_APP_ID` (defaults to `hod-production-v1`; should match `src/config/appConfig.js`)
+
+Set the Functions secret:
+- `firebase functions:secrets:set GEMINI_API_KEY`
+
+Deploy (rules/indexes/functions):
+- `firebase login`
+- `firebase use --add` (bind to your Firebase project if you haven't already)
+- `firebase deploy --only firestore:rules,firestore:indexes,functions`
+
+Typical setup (Firebase CLI):
+- `firebase login`
+- `firebase init functions` (if you want to regenerate config; this repo already includes `firebase.json` + `functions/`)
+- Set secrets/env for functions (choose your preferred approach: secrets or env vars)
+- Deploy: `firebase deploy --only functions,firestore`

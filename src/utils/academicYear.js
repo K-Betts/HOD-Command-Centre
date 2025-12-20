@@ -31,7 +31,7 @@ export function getAcademicYearLabel(date = new Date()) {
   return `${startYear}-${startYear + 1}`;
 }
 
-export function getAcademicYearStartYear(academicYear) {
+function getAcademicYearStartYear(academicYear) {
   const match = /^(\d{4})/.exec(academicYear || '');
   return match ? Number(match[1]) : null;
 }

@@ -6,18 +6,6 @@ import { useSchoolCalendarEvents } from '../../hooks/useSchoolCalendarEvents';
 import { useMeetings } from '../../hooks/useMeetings';
 import { askOmniBot } from '../../services/ai/chatAi';
 
-function toIso(value) {
-  if (!value) return null;
-  if (typeof value.toDate === 'function') return value.toDate().toISOString();
-  try {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return null;
-    return d.toISOString();
-  } catch {
-    return null;
-  }
-}
-
 function sanitizeTasks(tasks = []) {
   return (tasks || [])
     .slice(0, 60)
@@ -37,7 +25,6 @@ function sanitizeStaff(items = []) {
     name: s.name || s.fullName || '',
     role: s.role || s.position || '',
     timetable: s.timetable || null,
-    email: s.email || s.contact || '',
   }));
 }
 
@@ -260,5 +247,3 @@ export function ChatInterface({ user, onClose }) {
     </div>
   );
 }
-
-export default ChatInterface;

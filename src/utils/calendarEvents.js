@@ -5,7 +5,7 @@ const CATEGORY_KEYS = [
   'Enrichment/Trips',
 ];
 
-export const calendarCategoryMeta = {
+const calendarCategoryMeta = {
   'Academic Logistics': {
     label: 'Academic Logistics',
     badge: 'bg-indigo-50 text-indigo-700 border-indigo-200',

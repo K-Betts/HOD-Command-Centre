@@ -1,6 +1,10 @@
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-const modelPath =
-  'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent';
+import { httpsCallable } from 'firebase/functions';
+
+import { functions } from '../firebase';
+import { appId } from '../../config/appConfig';
+import { getClientSessionId } from '../../utils/session';
+
+const geminiGenerateContent = httpsCallable(functions, 'geminiGenerateContent');
 
 function extractTextCandidate(data) {
   const part =
@@ -33,13 +37,18 @@ function extractJsonBlock(raw) {
 
 async function fetchJson(body, config = {}) {
   try {
-    const response = await fetch(`${modelPath}?key=${apiKey}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ contents: [{ parts: [{ text: body }] }], ...config }),
+    const generationConfig = config?.generationConfig;
+    const responseMimeType = config?.responseMimeType;
+
+    const result = await geminiGenerateContent({
+      appId,
+      clientSessionId: getClientSessionId() || null,
+      promptText: body,
+      generationConfig,
+      responseMimeType,
     });
-    if (!response.ok) return {};
-    return await response.json();
+
+    return result?.data || {};
   } catch (err) {
     console.error('AI request failed', err);
     throw err;
@@ -101,5 +110,3 @@ Return a short, plain-text answer (a few sentences). If you cannot answer from t
     throw err;
   }
 }
-
-export default askOmniBot;

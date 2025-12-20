@@ -82,6 +82,7 @@ export function EndDayModal({ user, staff, context, updateContext, onClose }) {
               collection(db, 'artifacts', appId, 'users', user.uid, 'staffInsights'),
               {
                 ...insight,
+                  uid: user.uid,
                 fingerprint: fingerprintInsight(insight),
                 createdAt: serverTimestamp(),
               }
@@ -110,6 +111,7 @@ export function EndDayModal({ user, staff, context, updateContext, onClose }) {
               collection(db, 'artifacts', appId, 'users', user.uid, 'strategyNotes'),
               {
                 ...note,
+                  uid: user.uid,
                 fingerprint: fingerprintStrategyNote(note),
                 createdAt: serverTimestamp(),
               }

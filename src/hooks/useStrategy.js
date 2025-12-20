@@ -26,7 +26,7 @@ export function useStrategy(user) {
   const [error, setError] = useState(null);
   const ref = useMemo(
     () =>
-      user
+      user?.uid
         ? doc(
             db,
             'artifacts',
@@ -41,53 +41,75 @@ export function useStrategy(user) {
   );
 
   useEffect(() => {
-    if (!ref) return undefined;
-    return onSnapshot(
-      ref,
-      (d) => {
-        setError(null);
-        if (d.exists()) {
-          const data = d.data();
-          setPlan({
-            milestones: data.milestones || [],
-            themes: data.themes || [],
-            priorities: data.priorities || [],
-            // IMPORTANT: schoolPriorities are fetched based on academicYear ONLY (no term filter)
-            // They represent year-long mandates and should persist across all terms
-            schoolPriorities: data.schoolPriorities || [],
-            raw: data.raw || '',
-          });
-        } else {
-          setDoc(ref, {
-            milestones: [],
-            themes: [],
-            priorities: [],
-            schoolPriorities: [],
-            raw: '',
-          });
-        }
-      },
-      (err) => {
+    if (!ref || !user?.uid) return undefined;
+
+    let unsubscribe;
+    let cancelled = false;
+
+    const seedAndSubscribe = async () => {
+      try {
+        await setDoc(ref, { uid: user.uid }, { merge: true });
+        if (cancelled) return;
+
+        unsubscribe = onSnapshot(
+          ref,
+          (d) => {
+            setError(null);
+            if (d.exists()) {
+              const data = d.data();
+              setPlan({
+                milestones: data.milestones || [],
+                themes: data.themes || [],
+                priorities: data.priorities || [],
+                // IMPORTANT: schoolPriorities are fetched based on academicYear ONLY (no term filter)
+                // They represent year-long mandates and should persist across all terms
+                schoolPriorities: data.schoolPriorities || [],
+                raw: data.raw || '',
+              });
+            } else {
+              setDoc(ref, {
+                uid: user.uid,
+                milestones: [],
+                themes: [],
+                priorities: [],
+                schoolPriorities: [],
+                raw: '',
+              });
+            }
+          },
+          (err) => {
+            console.error(err);
+            setError(err.message || 'Unable to load strategy.');
+          }
+        );
+      } catch (err) {
         console.error(err);
         setError(err.message || 'Unable to load strategy.');
       }
-    );
-  }, [ref]);
+    };
+
+    seedAndSubscribe();
+
+    return () => {
+      cancelled = true;
+      if (unsubscribe) unsubscribe();
+    };
+  }, [ref, user]);
 
   const updatePlan = async (next) => {
-    if (!ref) return;
-    await setDoc(ref, next, { merge: true });
+    if (!ref || !user?.uid) return;
+    await setDoc(ref, { ...next, uid: user.uid }, { merge: true });
   };
 
   const savePriorities = async (priorities) => {
-    if (!ref) return;
-    await setDoc(ref, { priorities }, { merge: true });
+    if (!ref || !user?.uid) return;
+    await setDoc(ref, { priorities, uid: user.uid }, { merge: true });
   };
 
   const saveSchoolPriorities = async (schoolPriorities) => {
-    if (!ref) return;
+    if (!ref || !user?.uid) return;
     // Save school priorities at year level (NOT term-specific)
-    await setDoc(ref, { schoolPriorities }, { merge: true });
+    await setDoc(ref, { schoolPriorities, uid: user.uid }, { merge: true });
   };
 
   return { plan, updatePlan, savePriorities, saveSchoolPriorities, error };

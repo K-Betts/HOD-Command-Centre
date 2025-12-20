@@ -1,0 +1,22 @@
+{
+	"indexes": [
+		{
+			"collectionGroup": "feedback",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{ "fieldPath": "type", "order": "ASCENDING" },
+				{ "fieldPath": "timestamp", "order": "DESCENDING" }
+			]
+		},
+		{
+			"collectionGroup": "tasks",
+			"queryScope": "COLLECTION",
+			"fields": [
+				{ "fieldPath": "uid", "order": "ASCENDING" },
+				{ "fieldPath": "status", "order": "ASCENDING" },
+				{ "fieldPath": "academicYear", "order": "ASCENDING" }
+			]
+		}
+	],
+	"fieldOverrides": []
+}

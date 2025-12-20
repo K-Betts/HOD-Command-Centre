@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
+import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { appId } from '../config/appConfig';
 
@@ -138,7 +138,7 @@ export function useBuckBalance(user, staffList = []) {
         member.id,
         'interactions'
       );
-      const q = query(ref, orderBy('date', 'desc'));
+        const q = query(ref, where('uid', '==', user.uid), orderBy('date', 'desc'));
       const unsub = onSnapshot(q, (snap) => {
         const interactions = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
         const stats = buildStats(interactions);

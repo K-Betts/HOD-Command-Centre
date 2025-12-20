@@ -10,6 +10,7 @@ import {
   Star,
   CheckSquare,
   Kanban as KanbanIcon,
+  Timer,
 } from 'lucide-react';
 import { serverTimestamp } from 'firebase/firestore';
 import { useTasks } from '../../hooks/useTasks';
@@ -65,9 +66,39 @@ export function TaskBoard({ user, onEditTask }) {
   const { tasks, updateTask, deleteTask } = useTasks(user);
   const [sortBy, setSortBy] = useState('priority');
   const [viewMode, setViewMode] = useState('active');
+  const [timeFeedbackTask, setTimeFeedbackTask] = useState(null);
+  const [actualTime, setActualTime] = useState('same');
+
+  const requestTimeFeedback = (task) => {
+    setTimeFeedbackTask(task);
+    setActualTime('same');
+  };
+
+  const completeTaskWithFeedback = async () => {
+    if (!timeFeedbackTask) return;
+
+    const estimated = timeFeedbackTask.estimatedMinutes || 0;
+    const timeMapping = {
+      same: estimated,
+      less: Math.max(0, (estimated || 15) * 0.7),
+      more: (estimated || 15) * 1.5,
+    };
+
+    try {
+      await updateTask?.(timeFeedbackTask.id, {
+        status: 'done',
+        completedAt: serverTimestamp(),
+        actualTime,
+        actualMinutes: timeMapping[actualTime] || estimated,
+      });
+      setTimeFeedbackTask(null);
+    } catch (err) {
+      console.error('Failed to complete task', err);
+    }
+  };
 
   const activeTasks = useMemo(
-    () => tasks.filter((t) => !t.archivedAt),
+    () => tasks.filter((t) => !t.archivedAt && !t.isDelegated && !t.assignedTo),
     [tasks]
   );
 
@@ -190,6 +221,7 @@ export function TaskBoard({ user, onEditTask }) {
             updateTask={updateTask}
             deleteTask={deleteTask}
             onEditTask={onEditTask}
+            onRequestTimeFeedback={requestTimeFeedback}
           />
         </>
       ) : (
@@ -250,12 +282,78 @@ export function TaskBoard({ user, onEditTask }) {
                     updateTask={updateTask}
                     deleteTask={deleteTask}
                     onEditTask={onEditTask}
+                    onRequestTimeFeedback={requestTimeFeedback}
                   />
                 ))}
               </div>
             )}
           </BrainCard>
         </>
+      )}
+
+      {/* Time Feedback Modal */}
+      {timeFeedbackTask && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl p-8 shadow-2xl border border-gray-200 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="p-3 bg-indigo-100 rounded-2xl">
+                <Timer className="text-indigo-600" size={24} />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900">Task Complete!</h3>
+                <p className="text-sm text-gray-500">How was the time estimate?</p>
+              </div>
+            </div>
+
+            <div className="mb-6 p-4 bg-gray-50 rounded-2xl border border-gray-200">
+              <p className="text-sm font-semibold text-gray-700 mb-1">{timeFeedbackTask.title}</p>
+              <p className="text-xs text-gray-500">
+                Estimated: {timeFeedbackTask.estimatedTime || timeFeedbackTask.estimatedMinutes + ' mins' || 'Not set'}
+              </p>
+            </div>
+
+            <div className="space-y-2 mb-6">
+              <label className="text-xs font-bold uppercase text-gray-500 tracking-wider">
+                Actual Time
+              </label>
+              <div className="grid grid-cols-3 gap-3">
+                {[
+                  { value: 'less', label: 'Less', emoji: '⚡', color: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
+                  { value: 'same', label: 'Same', emoji: '✓', color: 'bg-sky-50 border-sky-200 text-sky-700' },
+                  { value: 'more', label: 'More', emoji: '⏰', color: 'bg-amber-50 border-amber-200 text-amber-700' },
+                ].map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => setActualTime(option.value)}
+                    className={`p-4 rounded-2xl border-2 font-semibold text-sm transition-all ${
+                      actualTime === option.value
+                        ? `${option.color} shadow-md scale-105`
+                        : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="text-2xl mb-1">{option.emoji}</div>
+                    <div>{option.label}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setTimeFeedbackTask(null)}
+                className="flex-1 px-6 py-3 rounded-xl border border-gray-200 bg-white text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={completeTaskWithFeedback}
+                className="flex-1 px-6 py-3 rounded-xl bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition-colors shadow-md"
+              >
+                Complete Task
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
@@ -274,7 +372,7 @@ export function createTaskFingerprint(taskLike, forcedAssignee) {
   );
 }
 
-export function ArchiveView({ user, onEditTask, archivedTasks: provided }) {
+function ArchiveView({ user, onEditTask, archivedTasks: provided }) {
   const { tasks, updateTask, deleteTask } = useTasks(user);
 
   const archivedTasks = useMemo(
@@ -327,7 +425,7 @@ export function ArchiveView({ user, onEditTask, archivedTasks: provided }) {
   );
 }
 
-function KanbanBoard({ tasks = [], updateTask, deleteTask, onEditTask }) {
+function KanbanBoard({ tasks = [], updateTask, deleteTask, onEditTask, onRequestTimeFeedback }) {
   const columns = [
     { key: 'todo', title: 'On Deck', description: 'Ready to start', accent: 'bg-sky-50 border-sky-100' },
     { key: 'doing', title: 'In Flight', description: 'Currently moving', accent: 'bg-amber-50 border-amber-100' },
@@ -348,6 +446,13 @@ function KanbanBoard({ tasks = [], updateTask, deleteTask, onEditTask }) {
     const nextIdx = direction === 'left' ? currentIdx - 1 : currentIdx + 1;
     const nextStatus = order[Math.max(0, Math.min(order.length - 1, nextIdx))];
     if (!nextStatus || nextStatus === current) return;
+    
+    if (nextStatus === 'done') {
+      // Trigger time feedback modal
+      onRequestTimeFeedback?.(task);
+      return;
+    }
+    
     try {
       await updateTask?.(task.id, {
         status: nextStatus,
@@ -357,6 +462,8 @@ function KanbanBoard({ tasks = [], updateTask, deleteTask, onEditTask }) {
       console.error('Failed to move task', err);
     }
   };
+
+  // Completion is handled by the parent TaskBoard time-feedback modal.
 
   const handleDelete = async (task, e) => {
     e?.stopPropagation?.();
@@ -584,7 +691,7 @@ function WeeklyWinCard({ task, onEditTask, updateTask, deleteTask }) {
   );
 }
 
-function TaskRow({ task, updateTask, deleteTask, onEditTask, archived = false, onRestore }) {
+function TaskRow({ task, updateTask, deleteTask, onEditTask, archived = false, onRestore, onRequestTimeFeedback }) {
   const displayTask = applyContextTags(task);
   const manualPriority = displayTask.priority || 'Medium';
   const effectivePriority = getEffectivePriority(displayTask);
@@ -602,6 +709,11 @@ function TaskRow({ task, updateTask, deleteTask, onEditTask, archived = false, o
 
     const newStatus = statusOrder[newIndex];
     if (!newStatus) return;
+
+    if (newStatus === 'done' && onRequestTimeFeedback) {
+      onRequestTimeFeedback(task);
+      return;
+    }
 
     if (newStatus === 'done') {
       await updateTask(task.id, {
@@ -623,6 +735,10 @@ function TaskRow({ task, updateTask, deleteTask, onEditTask, archived = false, o
 
   const handleMarkDone = async (e) => {
     e.stopPropagation();
+    if (onRequestTimeFeedback) {
+      onRequestTimeFeedback(task);
+      return;
+    }
     await updateTask(task.id, { status: 'done', completedAt: serverTimestamp() });
   };
 

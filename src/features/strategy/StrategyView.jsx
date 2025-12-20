@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { Map, Lightbulb, AlertTriangle, CheckCircle2, Loader2, Sparkles, PlusCircle, ClipboardList, Layers, Trash2, Calendar } from 'lucide-react';
 import { useContextData } from '../../hooks/useContextData';
 import { useStrategy } from '../../hooks/useStrategy';
@@ -6,11 +6,25 @@ import { analyzeProjectWhy } from '../../services/ai';
 import { useStrategyNotes } from '../../hooks/useStrategyNotes';
 import { useToast } from '../../context/ToastContext';
 import { useProjects } from '../../hooks/useProjects';
-import { BudgetView } from '../budget/BudgetView';
 import { BrainCard } from '../../components/ui/BrainCard';
-import { PriorityBoard } from './PriorityBoard';
-import { TermHorizon } from './TermHorizon';
-import { DepartmentCalendar } from './DepartmentCalendar';
+import { useModulePreferences } from '../../hooks/useModulePreferences';
+
+const PriorityBoard = lazy(() =>
+  import('./PriorityBoard').then((m) => ({ default: m.PriorityBoard }))
+);
+const TermHorizon = lazy(() =>
+  import('./TermHorizon').then((m) => ({ default: m.TermHorizon }))
+);
+const DepartmentCalendar = lazy(() =>
+  import('./DepartmentCalendar').then((m) => ({ default: m.DepartmentCalendar }))
+);
+const BudgetView = lazy(() =>
+  import('../budget/BudgetView').then((m) => ({ default: m.BudgetView }))
+);
+
+const tabFallback = (
+  <div className="p-6 text-sm text-slate-500">Loading...</div>
+);
 
 export function StrategyView({ user, staff = [] }) {
   const { context, updateContext } = useContextData(user);
@@ -18,6 +32,7 @@ export function StrategyView({ user, staff = [] }) {
   const { notes, deleteNote } = useStrategyNotes(user);
   const { addToast } = useToast();
   const { activeProjects, ideaProjects, completedProjects, addProject, updateProject, deleteProject } = useProjects(user);
+  const { preferences } = useModulePreferences(user);
   const statusOptions = ['ACTIVE', 'IDEA', 'COMPLETED', 'ARCHIVED'];
   const [projectForm, setProjectForm] = useState({
     title: '',
@@ -123,6 +138,17 @@ export function StrategyView({ user, staff = [] }) {
     { id: 'budget', label: 'Budget', icon: Lightbulb },
   ];
 
+  // Filter tabs based on user preferences
+  const filteredTabs = tabs.filter((tab) => {
+    const isEnabled = preferences?.modules?.strategy?.subModules?.[tab.id] ?? true;
+    return isEnabled;
+  });
+
+  const effectiveActiveTab =
+    filteredTabs.length > 0 && filteredTabs.some((t) => t.id === activeTab)
+      ? activeTab
+      : filteredTabs[0]?.id || activeTab;
+
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="flex-shrink-0 space-y-4">
@@ -137,9 +163,9 @@ export function StrategyView({ user, staff = [] }) {
             </p>
           </div>
           <div className="bg-white border border-slate-200 rounded-3xl shadow-sm p-2 flex items-center gap-2 flex-wrap">
-            {tabs.map((tab) => {
+            {filteredTabs.map((tab) => {
               const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+              const isActive = effectiveActiveTab === tab.id;
               return (
                 <button
                   key={tab.id}
@@ -159,10 +185,12 @@ export function StrategyView({ user, staff = [] }) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto space-y-6 pb-4">
-        {activeTab === 'priorities' && (
+        {effectiveActiveTab === 'priorities' && (
           <div className="space-y-6">
             <div className="sticky top-0 z-20 bg-slate-50 pt-4 -mt-4">
-              <TermHorizon user={user} />
+              <Suspense fallback={tabFallback}>
+                <TermHorizon user={user} />
+              </Suspense>
             </div>
 
           <BrainCard className="p-6 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white border-slate-800 shadow-lg">
@@ -192,15 +220,17 @@ export function StrategyView({ user, staff = [] }) {
             />
           </BrainCard>
 
-          <PriorityBoard
-            user={user}
-            staff={staff}
-            plan={plan}
-            savePriorities={savePriorities}
-            saveSchoolPriorities={saveSchoolPriorities}
-            context={context}
-            updateContext={updateContext}
-          />
+          <Suspense fallback={tabFallback}>
+            <PriorityBoard
+              user={user}
+              staff={staff}
+              plan={plan}
+              savePriorities={savePriorities}
+              saveSchoolPriorities={saveSchoolPriorities}
+              context={context}
+              updateContext={updateContext}
+            />
+          </Suspense>
 
           <BrainCard className="p-6 space-y-4">
             <div className="flex items-center gap-2">
@@ -240,7 +270,7 @@ export function StrategyView({ user, staff = [] }) {
         </div>
       )}
 
-      {activeTab === 'projects' && (
+      {effectiveActiveTab === 'projects' && (
         <div className="space-y-6">
           <BrainCard className="p-6 space-y-6">
             <div className="flex items-center gap-3">
@@ -479,13 +509,17 @@ export function StrategyView({ user, staff = [] }) {
         </div>
       )}
 
-      {activeTab === 'calendar' && (
-        <DepartmentCalendar user={user} />
+      {effectiveActiveTab === 'calendar' && (
+        <Suspense fallback={tabFallback}>
+          <DepartmentCalendar user={user} staff={staff} />
+        </Suspense>
       )}
 
-      {activeTab === 'budget' && (
+      {effectiveActiveTab === 'budget' && (
         <BrainCard className="p-4">
-          <BudgetView user={user} />
+          <Suspense fallback={tabFallback}>
+            <BudgetView user={user} />
+          </Suspense>
         </BrainCard>
       )}
     </div>

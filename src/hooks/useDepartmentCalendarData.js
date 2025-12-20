@@ -9,7 +9,7 @@ import { differenceInCalendarWeeks, isWithinInterval, addWeeks } from 'date-fns'
  * Aggregates data from across the app (tasks, events, priorities, budget)
  * and organizes it by week within a term for the Department Calendar
  */
-export function useDepartmentCalendarData(user, selectedTerm, currentAcademicYear) {
+export function useDepartmentCalendarData(user, selectedTerm, _currentAcademicYear) {
   const { tasks = [] } = useTasks(user);
   const { events = [] } = useScheduleEvents(user);
   const { plan = {} } = useStrategy(user);
@@ -67,7 +67,7 @@ export function useDepartmentCalendarData(user, selectedTerm, currentAcademicYea
     }
 
     return weeks;
-  }, [selectedTerm, tasks, events, plan, expenses, currentAcademicYear]);
+  }, [selectedTerm, tasks, events, plan, expenses]);
 
   return weeklyData;
 }

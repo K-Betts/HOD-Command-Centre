@@ -7,6 +7,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  where,
   writeBatch,
 } from 'firebase/firestore';
 import { db } from '../services/firebase';
@@ -60,7 +61,7 @@ export function useSchoolCalendarEvents(user) {
     }
 
     setLoading(true);
-    const q = query(ref, orderBy('date', 'asc'));
+      const q = query(ref, where('uid', '==', user.uid), orderBy('date', 'asc'));
     const unsubscribe = onSnapshot(
       q,
       (snap) => {
@@ -82,6 +83,13 @@ export function useSchoolCalendarEvents(user) {
 
   const replaceEvents = async (items = []) => {
     if (!user) throw new Error('No user session.');
+
+    // Security: Validate items is an array
+    if (!Array.isArray(items)) {
+      console.warn('replaceEvents: items must be an array, received:', typeof items);
+      return;
+    }
+
     const ref = buildRef(user);
     if (!ref) return;
 
@@ -90,10 +98,18 @@ export function useSchoolCalendarEvents(user) {
     snap.docs.forEach((d) => batch.delete(d.ref));
 
     items.forEach((evt) => {
+      // Security: Validate evt is a valid object before accessing properties
+      if (!evt || typeof evt !== 'object') {
+        console.warn('replaceEvents: skipping invalid event item:', evt);
+        return;
+      }
+
       const iso = toIsoDay(evt.date || evt.dateObj);
       if (!iso) return;
+
       const docRef = doc(ref);
       batch.set(docRef, {
+        uid: user.uid,
         title: evt.title || 'Calendar event',
         category: evt.category || 'Academic Logistics',
         date: iso,

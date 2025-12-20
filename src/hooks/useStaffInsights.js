@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { collection, deleteDoc, doc, onSnapshot } from 'firebase/firestore';
+import { collection, deleteDoc, doc, onSnapshot, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { appId } from '../config/appConfig';
 
@@ -13,7 +13,8 @@ export function useStaffInsights(user, staffName) {
       return undefined;
     }
     const ref = collection(db, 'artifacts', appId, 'users', user.uid, 'staffInsights');
-    return onSnapshot(ref, (snap) => {
+    const q = query(ref, where('uid', '==', user.uid));
+    return onSnapshot(q, (snap) => {
       const rows = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
         .filter((row) => (row.staffName || '').toLowerCase() === staffName.toLowerCase())

@@ -1,0 +1,66 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // RBAC: roles are keyed by uid.
+    function role() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/roles/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isUser() {
+      return role() in ['user', 'admin', 'superadmin'];
+    }
+
+    function isAdmin() {
+      return role() in ['admin', 'superadmin'];
+    }
+
+    function isSuperAdmin() {
+      return role() == 'superadmin';
+    }
+
+    // Role documents.
+    match /roles/{uid} {
+      allow get: if isSignedIn() && request.auth.uid == uid;
+      allow list: if isAdmin();
+      allow create, update, delete: if isSuperAdmin();
+    }
+
+    // --- THE FIX IS HERE ---
+    // Allow users to read their OWN whitelist entry to bootstrap their access.
+    match /whitelistedUsers/{email} {
+      allow get: if isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == email;
+      allow list, create, update, delete: if isSuperAdmin();
+    }
+    // -----------------------
+
+    // Per-user data namespace
+    match /artifacts/{appId}/users/{uid}/{document=**} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid && isUser();
+    }
+
+    // Admin-only readable collections
+    match /artifacts/{appId}/telemetry/{docId} {
+      allow create: if isUser();
+      allow read, list, update, delete: if isSuperAdmin();
+    }
+
+    match /artifacts/{appId}/feedback/{docId} {
+      allow create: if isUser();
+      allow read, list, update, delete: if isSuperAdmin();
+    }
+
+    match /artifacts/{appId}/aiQuota/{uid}/{document=**} {
+      allow get, list: if isSuperAdmin();
+      allow create, update, delete: if false;
+    }
+  }
+}
