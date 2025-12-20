@@ -208,24 +208,24 @@ function AuthedAppShell({ user }) {
   const HeaderIcon = activeHeader.icon;
 
   const header = (
-    <div className="px-8 py-5 flex justify-between items-center">
+    <div className="px-4 md:px-8 py-3 md:py-5 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
       <div>
-        <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+        <p className="text-[10px] md:text-[11px] font-semibold uppercase tracking-[0.2em] md:tracking-[0.28em] text-slate-500">
           Second Brain
         </p>
-        <div className="mt-2 flex items-center gap-3">
-          <HeaderIcon className="text-slate-700" size={20} />
-          <h1 className="text-xl font-bold text-slate-900">{activeHeader.label}</h1>
+        <div className="mt-2 flex items-center gap-2 md:gap-3">
+          <HeaderIcon className="text-slate-700 flex-shrink-0" size={18} />
+          <h1 className="text-lg md:text-xl font-bold text-slate-900 truncate">{activeHeader.label}</h1>
         </div>
       </div>
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2 md:gap-3 self-start md:self-center">
         <LiveClock />
         <button
           onClick={() => setShowDebrief(true)}
-          className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold tracking-wide shadow-md hover:bg-slate-800 transition-all"
+          className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-full bg-slate-900 text-white text-xs font-semibold tracking-wide shadow-md hover:bg-slate-800 transition-all whitespace-nowrap"
         >
-          <Sunset size={16} className="text-amber-300" />
-          End Day
+          <Sunset size={14} className="text-amber-300 flex-shrink-0" />
+          <span className="hidden sm:inline">End Day</span>
         </button>
       </div>
     </div>
@@ -239,6 +239,9 @@ function AuthedAppShell({ user }) {
       staff={staff}
       context={context}
       updateContext={updateContext}
+      activeTab={activeTab}
+      onActiveTabChange={setActiveTab}
+      waitingCount={waitingCount}
     >
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-8 pb-24">
         <Suspense
