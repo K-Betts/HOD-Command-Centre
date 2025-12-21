@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { DollarSign, ArrowRightLeft, Download, BarChart, Pencil, Trash2 } from 'lucide-react';
+import { DollarSign, ArrowRightLeft, Download, BarChart, Pencil, Trash2, Search } from 'lucide-react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { useBudget } from '../../hooks/useBudget';
 import { useBudgetSettings } from '../../hooks/useBudgetSettings';
@@ -65,6 +65,7 @@ export function BudgetView({ user }) {
   const [isConverting, setIsConverting] = useState(false);
   const [usingFallbackRate, setUsingFallbackRate] = useState(false);
   const [isLocked, setIsLocked] = useState(initialExpenseState.isLocked);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const currencies = ['AED', 'GBP', 'USD', 'EUR', 'AUD', 'CAD', 'INR'];
 
@@ -170,6 +171,26 @@ export function BudgetView({ user }) {
   }
 
   const filteredExpenses = filterByYearMode(expenses, selectedYear);
+  const visibleExpenses = React.useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim();
+    if (!q) return filteredExpenses;
+    return filteredExpenses.filter((ex) => {
+      const fields = [
+        ex.item,
+        ex.category,
+        ex.notes,
+        ex.originalCurrency,
+        ex.date,
+      ].map((v) => (v || '').toString().toLowerCase());
+      const amounts = [
+        ex.originalAmount != null ? Number(ex.originalAmount).toFixed(2) : '',
+        getFinalAED(ex).toFixed(2),
+      ];
+      return (
+        fields.some((f) => f.includes(q)) || amounts.some((a) => a.toString().toLowerCase().includes(q))
+      );
+    });
+  }, [filteredExpenses, searchQuery]);
 
   const totalSpentAED = filteredExpenses.reduce((sum, e) => sum + getFinalAED(e), 0);
   const remaining = (Number(totalBudgetAED) || 0) - totalSpentAED;
@@ -215,381 +236,241 @@ export function BudgetView({ user }) {
   };
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 h-[calc(100vh-140px)]">
-      <div className="bg-white rounded-[2rem] shadow-sm border border-gray-200 p-6 sm:p-8 flex flex-col gap-6">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
-            <DollarSign size={24} />
-          </div>
-          <div>
-            <h3 className="font-bold text-gray-800 text-xl">Annual Budget</h3>
-            <p className="text-gray-400 text-sm">Base currency: AED</p>
-          </div>
+    <div className="space-y-8">
+      {/* Header / Action Bar */}
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-gray-500">Strategy Control Room</p>
+          <h2 className="text-2xl font-bold text-gray-800">Budget</h2>
         </div>
-
-        <div className="space-y-3">
-          <label className="block text-xs font-bold text-gray-500 uppercase mb-1">
-            Total Budget (AED)
-          </label>
-          <input
-            type="number"
-            min="0"
-            value={totalBudgetAED}
-            onChange={(e) => setTotalBudgetAED(e.target.value)}
-            className="w-full p-4 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-indigo-100 outline-none text-lg font-bold"
-          />
-          <button
-            onClick={handleSaveBudget}
-            className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:opacity-60"
-            disabled={savingBudget}
-          >
-            {savingBudget ? 'Saving...' : 'Save Budget'}
-          </button>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <label className="text-xs font-bold text-gray-500 uppercase">
-            Academic Year
-          </label>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(e.target.value)}
-            className="flex-1 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 text-gray-500"
-          >
-            {academicYears.map((year) => (
-              <option key={year} value={year}>{year}</option>
-            ))}
-          </select>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
-            <div className="text-gray-500 font-semibold">Spent</div>
-            <div className="text-2xl font-black text-gray-800 mt-1">
-              AED {totalSpentAED.toFixed(2)}
-            </div>
-          </div>
-          <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
-            <div className="text-emerald-600 font-semibold">Remaining</div>
-            <div className="text-2xl font-black text-emerald-700 mt-1">
-              AED {remaining.toFixed(2)}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={handleAudit}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-700 hover:border-indigo-200 hover:text-indigo-700 transition-colors"
+            className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:border-indigo-200 hover:text-indigo-700 transition-colors"
           >
-            <ArrowRightLeft size={18} /> Analyze Spend
+            <ArrowRightLeft size={16} className="mr-1" /> Analyze Spend
           </button>
           <button
             onClick={downloadCSV}
             disabled={!filteredExpenses.length}
-            className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl font-bold text-gray-700 hover:border-indigo-200 hover:text-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3 py-2 rounded-lg border border-gray-200 bg-white text-sm font-bold text-gray-700 hover:border-indigo-200 hover:text-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            <Download size={18} /> Download CSV
+            <Download size={16} className="mr-1" /> Download CSV
           </button>
         </div>
-
-        {auditSummary && (
-          <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-sm text-gray-700">
-            {auditSummary}
-          </div>
-        )}
       </div>
 
-      <div className="bg-white rounded-[2rem] shadow-sm border border-gray-200 p-6 sm:p-8 flex flex-col gap-6">
-        <div className="flex items-center justify-between">
-          <h3 className="font-bold text-gray-800 text-lg">
-            {editingExpense ? 'Edit Transaction' : 'Log Expense / Transaction'}
-          </h3>
-          {editingExpense && (
-            <button onClick={handleCancelEdit} className="text-sm font-bold text-gray-500 hover:text-gray-800">Cancel</button>
+      {/* Top Row Controls */}
+      <div className="grid grid-cols-12 gap-8">
+        {/* Left: Annual Budget (span 4) */}
+        <div className="col-span-12 lg:col-span-4 bg-white rounded-[2rem] shadow-sm border border-gray-200 p-6 sm:p-8 flex flex-col gap-6">
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-700 flex items-center justify-center">
+              <DollarSign size={24} />
+            </div>
+            <div>
+              <h3 className="font-bold text-gray-800 text-xl">Annual Budget</h3>
+              <p className="text-gray-400 text-sm">Base currency: AED</p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Total Budget (AED)</label>
+            <input
+              type="number"
+              min="0"
+              value={totalBudgetAED}
+              onChange={(e) => setTotalBudgetAED(e.target.value)}
+              className="w-full p-4 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-indigo-100 outline-none text-lg font-bold"
+            />
+            <button
+              onClick={handleSaveBudget}
+              className="w-full py-3 bg-indigo-600 text-white rounded-xl font-bold shadow-md shadow-indigo-200 hover:bg-indigo-700 transition-all disabled:opacity-60"
+              disabled={savingBudget}
+            >
+              {savingBudget ? 'Saving...' : 'Save Budget'}
+            </button>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="text-xs font-bold text-gray-500 uppercase">Academic Year</label>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(e.target.value)}
+              className="flex-1 px-3 py-1.5 rounded-lg text-xs font-bold border border-gray-200 text-gray-500"
+            >
+              {academicYears.map((year) => (
+                <option key={year} value={year}>{year}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
+              <div className="text-gray-500 font-semibold">Spent</div>
+              <div className="text-2xl font-black text-gray-800 mt-1">AED {totalSpentAED.toFixed(2)}</div>
+            </div>
+            <div className="p-4 bg-emerald-50 rounded-xl border border-emerald-100">
+              <div className="text-emerald-600 font-semibold">Remaining</div>
+              <div className="text-2xl font-black text-emerald-700 mt-1">AED {remaining.toFixed(2)}</div>
+            </div>
+          </div>
+
+          {auditSummary && (
+            <div className="p-4 rounded-xl bg-gray-50 border border-gray-100 text-sm text-gray-700">{auditSummary}</div>
           )}
         </div>
 
-        <form className="space-y-4" onSubmit={handleSaveExpense}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">
-                Vendor / Item
-              </label>
-              <input
-                value={newExpense.item}
-                onChange={(e) =>
-                  setNewExpense((prev) => ({ ...prev, item: e.target.value }))
-                }
-                className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
-                placeholder="e.g. Textbooks"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">
-                Date
-              </label>
-              <input
-                type="date"
-                value={newExpense.date}
-                onChange={(e) =>
-                  setNewExpense((prev) => ({ ...prev, date: e.target.value }))
-                }
-                className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
-              />
-            </div>
+        {/* Right: Log Expense Form (span 8) */}
+        <div className="col-span-12 lg:col-span-8 bg-white rounded-[2rem] shadow-sm border border-gray-200 p-6 sm:p-8 flex flex-col gap-6">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-800 text-lg">{editingExpense ? 'Edit Transaction' : 'Log Expense / Transaction'}</h3>
+            {editingExpense && (
+              <button onClick={handleCancelEdit} className="text-sm font-bold text-gray-500 hover:text-gray-800">Cancel</button>
+            )}
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">
-                Original Amount
-              </label>
-              <div className="flex gap-2">
+          <form className="space-y-4" onSubmit={handleSaveExpense}>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Vendor / Item</label>
+                <input
+                  value={newExpense.item}
+                  onChange={(e) => setNewExpense((prev) => ({ ...prev, item: e.target.value }))}
+                  className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
+                  placeholder="e.g. Textbooks"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Date</label>
+                <input
+                  type="date"
+                  value={newExpense.date}
+                  onChange={(e) => setNewExpense((prev) => ({ ...prev, date: e.target.value }))}
+                  className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 items-start">
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Original Amount</label>
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newExpense.originalAmount}
+                    onChange={(e) => setNewExpense((prev) => ({ ...prev, originalAmount: e.target.value }))}
+                    className="flex-1 p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
+                    placeholder="Amount"
+                  />
+                  <select
+                    value={newExpense.originalCurrency}
+                    onChange={(e) => setNewExpense((prev) => ({ ...prev, originalCurrency: e.target.value }))}
+                    className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:ring-4 focus:ring-gray-100 outline-none"
+                  >
+                    {currencies.map((c) => (
+                      <option key={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div className="sm:col-span-1 min-w-0">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Rate to AED</label>
+                  <div className="flex items-center gap-2">
+                    {usingFallbackRate && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">Fallback</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsLocked((prev) => !prev)}
+                      className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-gray-200 bg-white hover:border-indigo-200"
+                    >
+                      {isLocked ? 'Unlock Rate' : 'Lock Rate'}
+                    </button>
+                  </div>
+                </div>
+                <input
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  value={newExpense.exchangeRateUsed}
+                  disabled={isLocked}
+                  onChange={(e) =>
+                    setNewExpense((prev) => {
+                      const rate = Number(e.target.value) || 0;
+                      const shouldRecalc = !isLocked;
+                      const final = shouldRecalc && rate && newExpense.originalAmount
+                        ? Number(newExpense.originalAmount) * rate
+                        : prev.finalAmountAED;
+                      return { ...prev, exchangeRateUsed: e.target.value, finalAmountAED: final };
+                    })
+                  }
+                  className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
+                  placeholder="e.g. 4.60"
+                />
+                <p className="text-[11px] text-gray-400 mt-1 whitespace-normal break-words leading-snug">
+                  {isLocked
+                    ? 'AED amount locked; rate changes will not overwrite it.'
+                    : isConverting
+                    ? 'Fetching live rate…'
+                    : usingFallbackRate
+                    ? 'Using fallback rate (offline).'
+                    : 'Live rate is fetched automatically.'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Final Amount (AED)</label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  value={newExpense.originalAmount}
-                  onChange={(e) =>
-                    setNewExpense((prev) => ({
-                      ...prev,
-                      originalAmount: e.target.value,
-                    }))
-                  }
-                  className="flex-1 p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
-                  placeholder="Amount"
+                  value={newExpense.finalAmountAED}
+                  onChange={(e) => setNewExpense((prev) => ({ ...prev, finalAmountAED: e.target.value }))}
+                  className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
+                  placeholder="Auto or manual"
                 />
-                <select
-                  value={newExpense.originalCurrency}
-                  onChange={(e) =>
-                    setNewExpense((prev) => ({
-                      ...prev,
-                      originalCurrency: e.target.value,
-                    }))
-                  }
-                  className="px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-sm focus:ring-4 focus:ring-gray-100 outline-none"
-                >
-                  {currencies.map((c) => (
-                    <option key={c}>{c}</option>
-                  ))}
-                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Category</label>
+                <input
+                  value={newExpense.category}
+                  onChange={(e) => setNewExpense((prev) => ({ ...prev, category: e.target.value }))}
+                  className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
+                  placeholder="e.g. Textbooks"
+                />
               </div>
             </div>
-            <div className="sm:col-span-1 min-w-0">
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">
-                  Rate to AED
-                </label>
-                <div className="flex items-center gap-2">
-                  {usingFallbackRate && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
-                      Fallback
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setIsLocked((prev) => !prev)}
-                    className="text-[11px] font-semibold px-3 py-1 rounded-lg border border-gray-200 bg-white hover:border-indigo-200"
-                  >
-                    {isLocked ? 'Unlock Rate' : 'Lock Rate'}
-                  </button>
-                </div>
-              </div>
-              <input
-                type="number"
-                step="0.0001"
-                min="0"
-                value={newExpense.exchangeRateUsed}
-                disabled={isLocked}
-                onChange={(e) =>
-                  setNewExpense((prev) => {
-                    const rate = Number(e.target.value) || 0;
-                    const shouldRecalc = !isLocked;
-                    const final =
-                      shouldRecalc && rate && newExpense.originalAmount
-                        ? Number(newExpense.originalAmount) * rate
-                        : prev.finalAmountAED;
-                    return { ...prev, exchangeRateUsed: e.target.value, finalAmountAED: final };
-                  })
-                }
-                className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
-                placeholder="e.g. 4.60"
-              />
-              <p className="text-[11px] text-gray-400 mt-1 whitespace-normal break-words leading-snug">
-                {isLocked
-                  ? 'AED amount locked; rate changes will not overwrite it.'
-                  : isConverting
-                  ? 'Fetching live rate…'
-                  : usingFallbackRate
-                  ? 'Using fallback rate (offline).'
-                  : 'Live rate is fetched automatically.'}
-              </p>
-            </div>
-          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">
-                Final Amount (AED)
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={newExpense.finalAmountAED}
-                onChange={(e) =>
-                  setNewExpense((prev) => ({ ...prev, finalAmountAED: e.target.value }))
-                }
+              <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">Notes (Optional)</label>
+              <textarea
+                value={newExpense.notes}
+                onChange={(e) => setNewExpense((prev) => ({ ...prev, notes: e.target.value }))}
                 className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
-                placeholder="Auto or manual"
+                placeholder="e.g. For Year 10 curriculum"
               />
             </div>
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">
-                Category
-              </label>
-              <input
-                value={newExpense.category}
-                onChange={(e) =>
-                  setNewExpense((prev) => ({ ...prev, category: e.target.value }))
-                }
-                className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
-                placeholder="e.g. Textbooks"
-              />
-            </div>
-          </div>
 
-          <div>
-            <label className="block text-xs font-bold text-gray-500 uppercase mb-2 tracking-wide">
-              Notes (Optional)
-            </label>
-            <textarea
-              value={newExpense.notes}
-              onChange={(e) =>
-                setNewExpense((prev) => ({ ...prev, notes: e.target.value }))
-              }
-              className="w-full p-3.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:ring-4 focus:ring-gray-100 outline-none text-sm"
-              placeholder="e.g. For Year 10 curriculum"
-            />
-          </div>
-
-          <button
-            className={`w-full py-3.5 text-white rounded-xl font-bold text-sm sm:text-base transition-all mt-2 ${editingExpense ? 'bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-200'}`}
-          >
-            {editingExpense ? 'Update Transaction' : 'Log Transaction'}
-          </button>
-        </form>
+            <button
+              className={`w-full py-3.5 text-white rounded-xl font-bold text-sm sm:text-base transition-all mt-2 ${editingExpense ? 'bg-indigo-600 hover:bg-indigo-700 shadow-md shadow-indigo-200' : 'bg-emerald-600 hover:bg-emerald-700 shadow-md shadow-emerald-200'}`}
+            >
+              {editingExpense ? 'Update Transaction' : 'Log Transaction'}
+            </button>
+          </form>
+        </div>
       </div>
 
-      <div className="xl:col-span-1 bg-white rounded-[2rem] shadow-sm border border-gray-200 p-6 sm:p-8 flex flex-col">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-gray-800 text-lg sm:text-xl">
-            Recent Transactions
-          </h3>
-          <p className="text-xs text-gray-400">
-            Showing {selectedYear} spend in <span className="font-semibold">AED</span>
-          </p>
-        </div>
-        <div className="flex-1 overflow-y-auto rounded-2xl border border-gray-100">
-          <table className="w-full text-left border-collapse text-sm">
-            <thead className="bg-gray-50 text-gray-400 text-[11px] uppercase tracking-[0.15em] font-bold">
-              <tr>
-                <th className="p-3 sm:p-4 rounded-l-2xl">Item</th>
-                <th className="p-3 sm:p-4 text-right hidden sm:table-cell">Original</th>
-                <th className="p-3 sm:p-4 text-right">AED</th>
-                <th className="p-3 sm:p-4 text-right rounded-r-2xl"></th>
-              </tr>
-            </thead>
-            <tbody className="text-gray-700">
-              {filteredExpenses.map((ex) => {
-                const original =
-                  ex.originalAmount != null && ex.originalCurrency
-                    ? `${ex.originalCurrency} ${Number(ex.originalAmount).toFixed(2)}`
-                    : ex.amount != null
-                    ? `AED ${Number(ex.amount).toFixed(2)}`
-                    : '-';
-
-                const aedValue = getFinalAED(ex).toFixed(2);
-                const tags = [];
-                const lockedFlag = ex.isLocked ?? ex.lockedAed;
-                if (lockedFlag) tags.push('Locked');
-                if (ex.usingFallbackRate) tags.push('Fallback');
-
-                return (
-                  <tr
-                    key={ex.id}
-                    className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/60 transition-colors"
-                  >
-                    <td className="p-3 sm:p-4 align-middle">
-                      <div className="font-semibold">{ex.item}</div>
-                      <div className="text-[11px] text-gray-400 mt-0.5">
-                        {ex.date || 'No date'}
-                      </div>
-                    </td>
-                    <td className="p-3 sm:p-4 text-right text-gray-500 align-middle hidden sm:table-cell">
-                      {original}
-                    </td>
-                    <td className="p-3 sm:p-4 text-right font-mono text-gray-800 align-middle">
-                      <div className="flex flex-col items-end gap-1">
-                        <div>AED {aedValue}</div>
-                        {tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 justify-end">
-                            {tags.map((tag) => (
-                              <span
-                                key={`${ex.id}-${tag}`}
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                                  tag === 'Fallback'
-                                    ? 'bg-amber-50 border-amber-200 text-amber-700'
-                                    : 'bg-indigo-50 border-indigo-200 text-indigo-700'
-                                }`}
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="p-3 sm:p-4 text-right align-middle flex gap-2 justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setEditingExpense(ex)}
-                        className="text-gray-400 hover:text-indigo-600"
-                        title="Edit"
-                      >
-                        <Pencil size={14} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => deleteExpense(ex.id)}
-                        className="text-gray-400 hover:text-rose-500"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-              {!filteredExpenses.length && (
-                <tr>
-                  <td
-                    colSpan="4"
-                    className="p-8 text-center text-gray-400 italic text-sm"
-                  >
-                    No history yet – log your first transaction.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="mt-6">
-          <h4 className="font-bold text-gray-800 text-sm mb-2 flex items-center gap-2">
-            <BarChart size={16} /> Where is it going?
-          </h4>
+      {/* Bottom Row Data */}
+      <div className="grid grid-cols-12 gap-8">
+        {/* Chart above table (full width) */}
+        <div className="col-span-12 bg-white rounded-[2rem] shadow-sm border border-gray-200 p-6 sm:p-8">
+          <h4 className="font-bold text-gray-800 text-sm mb-2 flex items-center gap-2"><BarChart size={16} /> Where is it going?</h4>
           <div className="h-64 w-full">
             {categoryChartData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
@@ -614,10 +495,98 @@ export function BudgetView({ user }) {
                 </PieChart>
               </ResponsiveContainer>
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-400 italic">
-                No data for chart.
-              </div>
+              <div className="flex items-center justify-center h-full text-gray-400 italic">No data for chart.</div>
             )}
+          </div>
+        </div>
+
+        {/* Transactions table full width */}
+        <div className="col-span-12 bg-white rounded-[2rem] shadow-sm border border-gray-200 p-6 sm:p-8">
+          <div className="flex items-center justify-between mb-4 gap-3">
+            <h3 className="font-bold text-gray-800 text-lg sm:text-xl">Recent Transactions</h3>
+            <div className="flex items-center gap-3">
+              <p className="text-xs text-gray-400">Showing {selectedYear} spend in <span className="font-semibold">AED</span></p>
+              <div className="relative">
+                <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Search transactions"
+                  placeholder="Search transactions..."
+                  className="w-48 sm:w-64 pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 bg-white focus:ring-4 focus:ring-gray-100 outline-none"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="max-h-[50vh] overflow-y-auto rounded-2xl border border-gray-100">
+            <table className="w-full text-left border-collapse text-sm">
+              <thead className="bg-gray-50 text-gray-400 text-[11px] uppercase tracking-[0.15em] font-bold">
+                <tr>
+                  <th className="p-3 sm:p-4 rounded-l-2xl">Item</th>
+                  <th className="p-3 sm:p-4 text-right hidden sm:table-cell">Original</th>
+                  <th className="p-3 sm:p-4 text-right">AED</th>
+                  <th className="p-3 sm:p-4 text-right rounded-r-2xl"></th>
+                </tr>
+              </thead>
+              <tbody className="text-gray-700">
+                {visibleExpenses.map((ex) => {
+                  const original =
+                    ex.originalAmount != null && ex.originalCurrency
+                      ? `${ex.originalCurrency} ${Number(ex.originalAmount).toFixed(2)}`
+                      : ex.amount != null
+                      ? `AED ${Number(ex.amount).toFixed(2)}`
+                      : '-';
+
+                  const aedValue = getFinalAED(ex).toFixed(2);
+                  const tags = [];
+                  const lockedFlag = ex.isLocked ?? ex.lockedAed;
+                  if (lockedFlag) tags.push('Locked');
+                  if (ex.usingFallbackRate) tags.push('Fallback');
+
+                  return (
+                    <tr key={ex.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/60 transition-colors">
+                      <td className="p-3 sm:p-4 align-middle">
+                        <div className="font-semibold">{ex.item}</div>
+                        <div className="text-[11px] text-gray-400 mt-0.5">{ex.date || 'No date'}</div>
+                      </td>
+                      <td className="p-3 sm:p-4 text-right text-gray-500 align-middle hidden sm:table-cell">{original}</td>
+                      <td className="p-3 sm:p-4 text-right font-mono text-gray-800 align-middle">
+                        <div className="flex flex-col items-end gap-1">
+                          <div>AED {aedValue}</div>
+                          {tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 justify-end">
+                              {tags.map((tag) => (
+                                <span
+                                  key={`${ex.id}-${tag}`}
+                                  className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${tag === 'Fallback' ? 'bg-amber-50 border-amber-200 text-amber-700' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-3 sm:p-4 text-right align-middle flex gap-2 justify-end">
+                        <button type="button" onClick={() => setEditingExpense(ex)} className="text-gray-400 hover:text-indigo-600" title="Edit">
+                          <Pencil size={14} />
+                        </button>
+                        <button type="button" onClick={() => deleteExpense(ex.id)} className="text-gray-400 hover:text-rose-500" title="Delete">
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {visibleExpenses.length === 0 && (
+                  <tr>
+                    <td colSpan="4" className="p-8 text-center text-gray-400 italic text-sm">
+                      {filteredExpenses.length ? 'No matching transactions.' : 'No history yet – log your first transaction.'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Zap, X } from 'lucide-react';
 import { AppShell } from '../components/ui/AppShell';
 import { ActionFab } from '../components/ui/ActionFab';
@@ -23,6 +23,19 @@ export function AppLayout({
   const [showChat, setShowChat] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
 
+  // Manage body scroll lock when modals are open
+  useEffect(() => {
+    const isModalOpen = showBrainDump || showChat || showFeedback;
+    if (isModalOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [showBrainDump, showChat, showFeedback]);
+
   return (
     <>
       <AppShell sidebar={sidebar} header={header}>
@@ -34,15 +47,23 @@ export function AppLayout({
           onFeedback={() => setShowFeedback(true)}
         />
 
-        <Modal isOpen={showBrainDump} onClose={() => setShowBrainDump(false)}>
+        <Modal
+          isOpen={showBrainDump}
+          onClose={() => setShowBrainDump(false)}
+          aria-labelledby="quick-capture-title"
+        >
           <div className="bg-white rounded-3xl p-8 md:p-10 w-[90vw] max-w-6xl min-h-[50vh] md:min-h-[60vh]">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-3">
+              <h2
+                id="quick-capture-title"
+                className="text-xl md:text-2xl font-bold text-slate-900 flex items-center gap-3"
+              >
                 <Zap className="text-amber-500" size={24} /> Quick Capture
               </h2>
               <button
                 onClick={() => setShowBrainDump(false)}
                 className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                aria-label="Close quick capture dialog"
               >
                 <X size={20} className="text-slate-400" />
               </button>
@@ -60,13 +81,20 @@ export function AppLayout({
           <ChatInterface user={user} onClose={() => setShowChat(false)} />
         </SlideOverModal>
 
-        <Modal isOpen={showFeedback} onClose={() => setShowFeedback(false)}>
+        <Modal
+          isOpen={showFeedback}
+          onClose={() => setShowFeedback(false)}
+          aria-labelledby="feedback-title"
+        >
           <div className="bg-white rounded-3xl p-8 md:p-10 w-[90vw] max-w-5xl min-h-[50vh] md:min-h-[60vh]">
             <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl md:text-2xl font-bold text-slate-900">Share Feedback</h2>
+              <h2 id="feedback-title" className="text-xl md:text-2xl font-bold text-slate-900">
+                Share Feedback
+              </h2>
               <button
                 onClick={() => setShowFeedback(false)}
                 className="p-2 hover:bg-slate-100 rounded-full transition-colors"
+                aria-label="Close feedback dialog"
               >
                 <X size={20} className="text-slate-400" />
               </button>

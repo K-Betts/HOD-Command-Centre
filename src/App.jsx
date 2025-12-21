@@ -12,11 +12,15 @@ import {
   FileText,
   NotebookPen,
   Shield,
+  LogOut,
+  Heart,
 } from 'lucide-react';
 import { DashboardView } from './features/dashboard/DashboardView';
 import { TaskBoard } from './features/tasks/TaskBoard';
 import { LiveClock } from './components/ui/LiveClock';
+import { TabBar } from './components/ui/TabBar';
 import { useTasks } from './hooks/useTasks';
+import { signOut } from './services/firebase';
 import { useStaff } from './hooks/useStaff';
 import { useContextData } from './hooks/useContextData';
 import { useTelemetry } from './hooks/useTelemetry';
@@ -66,6 +70,9 @@ const MeetingsView = lazy(() =>
 const AdminDashboard = lazy(() =>
   import('./features/admin/AdminDashboard').then((m) => ({ default: m.AdminDashboard }))
 );
+const WellbeingDashboard = lazy(() =>
+  import('./features/wellbeing/WellbeingDashboard').then((m) => ({ default: m.WellbeingDashboard }))
+);
 
 // --- Main App Component ---
 export default function App() {
@@ -86,7 +93,15 @@ export default function App() {
 }
 
 function AuthedAppShell({ user }) {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState(() => {
+    // Restore activeTab from localStorage on initial load
+    try {
+      const saved = window.localStorage?.getItem?.('hod_activeTab');
+      return saved || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
   const [editingTask, setEditingTask] = useState(null);
   const [showDebrief, setShowDebrief] = useState(false);
   const { updateTask, deleteTask, addTask, tasks } = useTasks(user);
@@ -100,6 +115,12 @@ function AuthedAppShell({ user }) {
 
   useEffect(() => {
     activeTabRef.current = activeTab;
+    // Persist activeTab to localStorage whenever it changes
+    try {
+      window.localStorage?.setItem?.('hod_activeTab', activeTab);
+    } catch {
+      // Ignore storage errors
+    }
   }, [activeTab]);
   
   const waitingCount = useMemo(
@@ -199,6 +220,7 @@ function AuthedAppShell({ user }) {
     advocate: { icon: Sparkles, label: 'Idea Refiner' },
     reports: { icon: FileText, label: 'Board Report' },
     weeklyEmail: { icon: Mail, label: 'Weekly Email' },
+    wellbeing: { icon: Heart, label: 'Wellbeing' },
     settings: { icon: SlidersHorizontal, label: 'System Settings' },
     meetings: { icon: NotebookPen, label: 'Meetings' },
     admin: { icon: Shield, label: 'Admin Console' },
@@ -206,6 +228,14 @@ function AuthedAppShell({ user }) {
 
   const activeHeader = headerMeta[activeTab] || headerMeta.dashboard;
   const HeaderIcon = activeHeader.icon;
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   const header = (
     <div className="px-4 md:px-8 py-3 md:py-5 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
@@ -226,6 +256,14 @@ function AuthedAppShell({ user }) {
         >
           <Sunset size={14} className="text-amber-300 flex-shrink-0" />
           <span className="hidden sm:inline">End Day</span>
+        </button>
+        <button
+          onClick={handleLogout}
+          className="flex items-center gap-2 px-3 md:px-4 py-2 rounded-full bg-slate-200 text-slate-700 text-xs font-semibold tracking-wide shadow-sm hover:bg-slate-300 transition-all whitespace-nowrap"
+          title="Sign out of your account"
+        >
+          <LogOut size={14} className="flex-shrink-0" />
+          <span className="hidden sm:inline">Logout</span>
         </button>
       </div>
     </div>
@@ -271,6 +309,7 @@ function AuthedAppShell({ user }) {
             {activeTab === 'advocate' && <DevilsAdvocate user={user} />}
             {activeTab === 'reports' && <DepartmentReport user={user} />}
             {activeTab === 'weeklyEmail' && <WeeklyEmailGenerator user={user} />}
+            {activeTab === 'wellbeing' && <WellbeingDashboard user={user} />}
             {activeTab === 'settings' && <SettingsHub user={user} />}
             {activeTab === 'admin' && <AdminDashboard />}
           </div>
@@ -305,50 +344,61 @@ function AuthedAppShell({ user }) {
 
 function SettingsHub({ user }) {
   const [activeSection, setActiveSection] = useState('system');
+  
   const sections = [
-    { id: 'system', label: 'System Rhythm' },
-    { id: 'timetable', label: 'Schedule / Timetable' },
-    { id: 'modules', label: 'Module Preferences' },
+    { 
+      id: 'system', 
+      label: 'System Rhythm',
+      description: 'Configure academic year, term dates, and system settings'
+    },
+    { 
+      id: 'timetable', 
+      label: 'Schedule / Timetable',
+      description: 'Manage your weekly schedule and timetable events'
+    },
+    { 
+      id: 'modules', 
+      label: 'Module Preferences',
+      description: 'Choose which modules appear in your navigation'
+    },
   ];
+
+  const activeSection_ = sections.find((s) => s.id === activeSection);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
-            System
-          </p>
-          <h2 className="text-2xl font-bold text-slate-900">Settings & Schedule</h2>
-          <p className="text-sm text-slate-500">
-            Configure the year rhythm and manage timetable data from a single control room.
-          </p>
-        </div>
-        <div className="bg-slate-100 border border-slate-200 rounded-full p-1 flex items-center gap-1">
-          {sections.map((section) => (
-            <button
-              key={section.id}
-              onClick={() => setActiveSection(section.id)}
-              className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
-                activeSection === section.id
-                  ? 'bg-white shadow text-slate-900'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              {section.label}
-            </button>
-          ))}
-        </div>
+      {/* Header with Description */}
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-500">
+          System
+        </p>
+        <h2 className="text-2xl font-bold text-slate-900">Settings & Schedule</h2>
+        <p className="text-sm text-slate-500 mt-2">
+          {activeSection_?.description || 'Configure your system settings and preferences.'}
+        </p>
       </div>
 
-      {activeSection === 'system' ? (
-        <SchoolYearSettings user={user} />
-      ) : activeSection === 'modules' ? (
-        <ModulePreferences user={user} />
-      ) : (
-        <div className="bg-white/80 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-sm p-6">
-          <ScheduleView user={user} />
-        </div>
-      )}
+      {/* TabBar */}
+      <TabBar 
+        tabs={sections} 
+        activeId={activeSection} 
+        onChange={setActiveSection}
+      />
+
+      {/* Content */}
+      <div className="animate-in fade-in duration-300">
+        {activeSection === 'system' && (
+          <SchoolYearSettings user={user} />
+        )}
+        {activeSection === 'timetable' && (
+          <div className="bg-white/80 backdrop-blur-sm border border-slate-100 rounded-2xl shadow-sm p-6">
+            <ScheduleView user={user} />
+          </div>
+        )}
+        {activeSection === 'modules' && (
+          <ModulePreferences user={user} />
+        )}
+      </div>
     </div>
   );
 }

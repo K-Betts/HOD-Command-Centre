@@ -37,7 +37,7 @@ export function ActionFab({
               setOpen(false);
               onFeedback();
             }}
-            title="💡 Feedback"
+            aria-label="Share feedback or report an issue"
           >
             <span>Feedback</span>
             <MessageSquare className="text-blue-500" size={20} />
@@ -53,7 +53,7 @@ export function ActionFab({
               setOpen(false);
               onAskOmni();
             }}
-            title="💬 Ask Orbit"
+            aria-label="Ask Orbit an AI question"
           >
             <span>Ask Orbit</span>
             <MessageCircle className="text-emerald-500" size={20} />
@@ -69,7 +69,7 @@ export function ActionFab({
               setOpen(false);
               onQuickCapture();
             }}
-            title="⚡️ Quick Capture"
+            aria-label="Quick capture a note or task"
           >
             <span>Quick Capture</span>
             <Zap className="text-amber-500" size={20} />
@@ -90,6 +90,7 @@ export function ActionFab({
         onClick={() => setOpen((s) => !s)}
         aria-haspopup="true"
         aria-expanded={open}
+        aria-label={open ? 'Close action menu' : 'Open action menu (Quick Capture, Ask AI, Feedback)'}
         {...props}
       >
         <span className="sr-only">{label}</span>

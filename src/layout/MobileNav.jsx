@@ -1,35 +1,18 @@
 import React from 'react';
 import {
-  Brain,
-  LayoutGrid,
-  CheckSquare,
-  Users,
-  Map,
-  MessageSquare,
-  Mail,
-  SlidersHorizontal,
-  FileText,
-  NotebookPen,
   Menu,
 } from 'lucide-react';
+import { getMobileNavPrimaryItems, getMobileNavMoreItems } from '../config/navigationConfig';
 
 export function MobileNav({ activeTab, onChange, waitingCount = 0 }) {
   const [showMenu, setShowMenu] = React.useState(false);
 
-  const mainNavItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid },
-    { id: 'tasks', label: 'Tasks', icon: CheckSquare, badge: waitingCount },
-    { id: 'staff', label: 'Staff', icon: Users },
-    { id: 'settings', label: 'Settings', icon: SlidersHorizontal },
-  ];
+  const mainNavItems = getMobileNavPrimaryItems().map(item => ({
+    ...item,
+    badge: item.id === 'tasks' ? waitingCount : undefined,
+  }));
 
-  const moreNavItems = [
-    { id: 'meetings', label: 'Meetings', icon: NotebookPen },
-    { id: 'strategy', label: 'Strategy', icon: Map },
-    { id: 'comms', label: 'Comms', icon: MessageSquare },
-    { id: 'weeklyEmail', label: 'Email', icon: Mail },
-    { id: 'reports', label: 'Reports', icon: FileText },
-  ];
+  const moreNavItems = getMobileNavMoreItems();
 
   const handleNavClick = (id) => {
     onChange?.(id);
@@ -51,6 +34,8 @@ export function MobileNav({ activeTab, onChange, waitingCount = 0 }) {
                 className={`flex flex-col items-center justify-center flex-1 h-16 gap-1 transition-colors relative ${
                   isActive ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'
                 }`}
+                aria-label={`Navigate to ${item.label}`}
+                aria-current={isActive ? 'page' : undefined}
               >
                 <div className="relative">
                   <Icon size={20} />
@@ -75,6 +60,9 @@ export function MobileNav({ activeTab, onChange, waitingCount = 0 }) {
               className={`flex flex-col items-center justify-center flex-1 h-16 gap-1 transition-colors ${
                 showMenu ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'
               }`}
+              aria-label={showMenu ? 'Close more menu' : 'Open more menu'}
+              aria-haspopup="true"
+              aria-expanded={showMenu}
             >
               <Menu size={20} />
               <span className="text-[10px] font-medium">More</span>
@@ -100,6 +88,8 @@ export function MobileNav({ activeTab, onChange, waitingCount = 0 }) {
                             ? 'bg-slate-100 text-slate-900 font-semibold'
                             : 'text-slate-700 hover:bg-slate-50'
                         }`}
+                        aria-label={`Navigate to ${item.label}`}
+                        aria-current={isActive ? 'page' : undefined}
                       >
                         <Icon size={18} className="flex-shrink-0" />
                         <span className="text-sm">{item.label}</span>

@@ -1,69 +1,18 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useAuthState } from 'react-firebase-hooks/auth';
-import {
-  Brain,
-  LayoutGrid,
-  CheckSquare,
-  Users,
-  Map,
-  MessageSquare,
-  Sparkles,
-  Mail,
-  SlidersHorizontal,
-  FileText,
-  NotebookPen,
-  Shield,
-} from 'lucide-react';
+import { Brain, Shield } from 'lucide-react';
 import { AIFuelGauge } from '../components/ui/AIFuelGauge';
 import { auth } from '../services/firebase';
-import { logNavigation } from '../services/telemetry';
 import { useModulePreferences } from '../hooks/useModulePreferences';
-import { MODULE_DEFINITIONS } from '../config/moduleDefinitions';
 import { useUserRole } from '../hooks/useUserRole';
+import { getMainNavGroups } from '../config/navigationConfig';
 
 export function Sidebar({ activeTab, onChange, waitingCount = 0 }) {
   const [user] = useAuthState(auth);
   const { isAdmin } = useUserRole(user);
   const { preferences, loading: _preferencesLoading } = useModulePreferences(user);
 
-  // Log navigation events
-  useEffect(() => {
-    if (activeTab) {
-      logNavigation(activeTab);
-    }
-  }, [activeTab]);
-
-  const navGroups = [
-    {
-      title: 'EXECUTION',
-      items: [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutGrid, note: 'Mission control' },
-        { id: 'tasks', label: 'Tasks', icon: CheckSquare, note: 'Includes archive filter' },
-        { id: 'meetings', label: 'Meetings', icon: NotebookPen, note: 'Agendas + minutes' },
-      ],
-    },
-    {
-      title: 'LEADERSHIP',
-      items: [
-        { id: 'staff', label: 'Staff Room', icon: Users, note: 'Leadership tab inside' },
-        { id: 'strategy', label: 'Strategy', icon: Map, note: 'Horizon + Budget' },
-        { id: 'reports', label: 'Reports', icon: FileText, note: 'Board report' },
-      ],
-    },
-    {
-      title: 'OUTPUTS',
-      items: [
-        { id: 'comms', label: 'Comms', icon: MessageSquare },
-        { id: 'weeklyEmail', label: 'Weekly Email', icon: Mail },
-      ],
-    },
-    {
-      title: 'SYSTEM',
-      items: [
-        { id: 'settings', label: 'Settings', icon: SlidersHorizontal, note: 'Schedule & timetable' },
-      ],
-    },
-  ];
+  const navGroups = getMainNavGroups();
 
   // Filter navigation items based on user preferences
   const filteredNavGroups = navGroups.map((group) => ({

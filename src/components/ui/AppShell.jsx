@@ -16,7 +16,7 @@ export function AppShell({ sidebar, header, children, className }) {
           </div>
         )}
         <main className="flex-1 overflow-y-auto relative bg-slate-50">
-          <div className="p-4 md:p-6 max-w-[1600px] mx-auto w-full">
+          <div className="px-4 md:px-8 py-6 max-w-[1600px] mx-auto w-full">
             {children}
           </div>
         </main>
